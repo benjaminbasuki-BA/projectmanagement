@@ -21,3 +21,21 @@ export const updateColumnValuesSchema = z.record(
   z.unknown(),
 );
 export type UpdateColumnValuesInput = z.infer<typeof updateColumnValuesSchema>;
+
+/**
+ * docs/02-data-model.md §5.1: `comments.body` is a TipTap/ProseMirror doc
+ * in the full spec. The web app doesn't have a rich-text editor wired up
+ * yet (that's its own follow-up), so the API takes plain text and wraps
+ * it into a minimal valid doc shape server-side (comments.routes.ts) —
+ * forward-compatible with a real editor later without a data migration.
+ */
+export const createCommentSchema = z.object({
+  bodyText: z.string().trim().min(1).max(10_000),
+  parentCommentId: z.string().uuid().optional(),
+});
+export type CreateCommentInput = z.infer<typeof createCommentSchema>;
+
+export const updateCommentSchema = z.object({
+  bodyText: z.string().trim().min(1).max(10_000),
+});
+export type UpdateCommentInput = z.infer<typeof updateCommentSchema>;

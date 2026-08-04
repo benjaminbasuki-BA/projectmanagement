@@ -17,6 +17,7 @@ import {
 } from "./schemas.js";
 import { resolveColumnValue } from "./column-values.js";
 import { conflict, notFound, validationError } from "../../lib/errors.js";
+import { recordActivity } from "../../lib/activity.js";
 import type { AppDb } from "../../db/types.js";
 
 const MAX_ITEMS_PER_BOARD = 20_000; // 01 §2.1 "20,000 items per board (hard)"
@@ -143,6 +144,15 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
           .update(boards)
           .set({ itemCount: sql`${boards.itemCount} + 1` })
           .where(eq(boards.id, boardId));
+
+        await recordActivity(tx, {
+          orgId,
+          boardId,
+          itemId: created.id,
+          actorId: userId,
+          eventType: "item.created",
+          payload: { name },
+        });
 
         return { kind: "ok" as const, item: created };
       });
@@ -291,6 +301,34 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
           .set(parsed.data)
           .where(eq(items.id, itemId))
           .returning();
+
+        if (
+          parsed.data.name !== undefined &&
+          parsed.data.name !== existing.name
+        ) {
+          await recordActivity(tx, {
+            orgId,
+            boardId: existing.boardId,
+            itemId,
+            actorId: userId,
+            eventType: "item.renamed",
+            payload: { from: existing.name, to: parsed.data.name },
+          });
+        }
+        if (
+          parsed.data.position !== undefined &&
+          parsed.data.position !== existing.position
+        ) {
+          await recordActivity(tx, {
+            orgId,
+            boardId: existing.boardId,
+            itemId,
+            actorId: userId,
+            eventType: "item.moved",
+            payload: {},
+          });
+        }
+
         return updated;
       });
 
@@ -350,6 +388,27 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
           resolved.push({ columnId, ...result.data });
         }
 
+        // Fetched before the writes below so the activity payload can
+        // show what actually changed (02 §5.3's documented
+        // `{"from":{...},"to":{...}}` shape), not just that a PATCH
+        // happened.
+        const before = await tx
+          .select({
+            columnId: columnValues.columnId,
+            value: columnValues.value,
+          })
+          .from(columnValues)
+          .where(
+            and(
+              eq(columnValues.itemId, itemId),
+              inArray(
+                columnValues.columnId,
+                resolved.map((rv) => rv.columnId),
+              ),
+            ),
+          );
+        const beforeById = new Map(before.map((b) => [b.columnId, b.value]));
+
         for (const rv of resolved) {
           await tx
             .insert(columnValues)
@@ -375,6 +434,18 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
                 updatedAt: new Date(),
               },
             });
+
+          const from = beforeById.get(rv.columnId) ?? null;
+          if (JSON.stringify(from) !== JSON.stringify(rv.value)) {
+            await recordActivity(tx, {
+              orgId,
+              boardId: item.boardId,
+              itemId,
+              actorId: userId,
+              eventType: "column_value.changed",
+              payload: { columnId: rv.columnId, from, to: rv.value },
+            });
+          }
         }
 
         const values = await tx
@@ -422,6 +493,16 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
           .set({ archivedAt: new Date() })
           .where(eq(items.id, itemId))
           .returning();
+
+        await recordActivity(tx, {
+          orgId,
+          boardId: existing.boardId,
+          itemId,
+          actorId: userId,
+          eventType: "item.archived",
+          payload: {},
+        });
+
         return updated;
       });
 
@@ -453,6 +534,15 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
             .update(boards)
             .set({ itemCount: sql`greatest(${boards.itemCount} - 1, 0)` })
             .where(eq(boards.id, updated.boardId));
+
+          await recordActivity(tx, {
+            orgId,
+            boardId: updated.boardId,
+            itemId: updated.id,
+            actorId: userId,
+            eventType: "item.deleted",
+            payload: {},
+          });
         }
         return updated;
       });

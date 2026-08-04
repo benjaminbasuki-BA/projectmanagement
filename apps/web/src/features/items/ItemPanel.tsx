@@ -1,16 +1,20 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive, X } from "lucide-react";
 import { Badge } from "@trellis/ui";
 import * as api from "../../lib/api-client";
 import type { Column, ColumnValue, Item } from "../../lib/api-client";
 import { Cell, COLUMN_TYPE_META } from "./cells";
+import { CommentsTab } from "./CommentsTab";
+import { ActivityTab } from "./ActivityTab";
+
+type Tab = "details" | "updates" | "activity";
 
 /**
  * Item detail slide-over (doc 11 §C.6), route-synced via `?item=`.
- * MVP-partial: title + facts grid (the same Cell editors as the table)
- * + archive. Updates/Files/Activity tabs land with the comments API
- * (doc 08 sprints 5–6).
+ * Details + Updates (comments) + Activity tabs. Files is still a
+ * follow-up — attachments need the S3/imgproxy pipeline (doc 03 §7),
+ * which isn't wired up yet.
  */
 export function ItemPanel({
   boardId,
@@ -28,6 +32,15 @@ export function ItemPanel({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const [tab, setTab] = useState<Tab>("details");
+  // Reset during render rather than in an effect (see CommandMenu.tsx /
+  // TableView.tsx for why) — back to Details whenever a different item
+  // opens in the panel.
+  const [tabForItem, setTabForItem] = useState(item.id);
+  if (item.id !== tabForItem) {
+    setTabForItem(item.id);
+    setTab("details");
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -92,36 +105,64 @@ export function ItemPanel({
         />
       </div>
 
-      {/* Facts grid — the same Cell editors as the table (doc 11 §H.1) */}
-      <div className="flex-1 space-y-1 overflow-y-auto px-5 py-4">
-        {columns.map((col) => {
-          const meta = COLUMN_TYPE_META[col.type];
-          return (
-            <div
-              key={col.id}
-              className="grid grid-cols-[132px_1fr] items-center gap-2 py-1"
-            >
-              <span className="flex items-center gap-1.5 text-[13px] text-neutral-500">
-                {meta && <meta.Icon size={13} className="text-neutral-400" />}
-                <span className="truncate">{col.title}</span>
-              </span>
-              <Cell
-                column={col}
-                cell={cellMap.get(item.id)?.get(col.id)}
-                onSave={(value) => onSaveCell(item.id, col.id, value)}
-              />
-            </div>
-          );
-        })}
-        {columns.length === 0 && (
-          <p className="py-4 text-sm text-neutral-400">
-            No columns yet — add one from the board toolbar.
-          </p>
-        )}
+      {/* Tabs */}
+      <div className="flex shrink-0 gap-4 border-b border-neutral-100 px-5">
+        {(
+          [
+            ["details", "Details"],
+            ["updates", "Updates"],
+            ["activity", "Activity"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`border-b-2 py-2.5 text-[13px] font-medium ${
+              tab === key
+                ? "border-neutral-900 text-neutral-900"
+                : "border-transparent text-neutral-400 hover:text-neutral-600"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      <div className="shrink-0 border-t border-neutral-100 px-5 py-3 text-xs text-neutral-400">
-        Updates, files & activity arrive with the comments API (Sprint 5–6).
+      <div className="flex-1 overflow-y-auto px-5">
+        {tab === "details" && (
+          <div className="space-y-1 py-4">
+            {columns.map((col) => {
+              const meta = COLUMN_TYPE_META[col.type];
+              return (
+                <div
+                  key={col.id}
+                  className="grid grid-cols-[132px_1fr] items-center gap-2 py-1"
+                >
+                  <span className="flex items-center gap-1.5 text-[13px] text-neutral-500">
+                    {meta && (
+                      <meta.Icon size={13} className="text-neutral-400" />
+                    )}
+                    <span className="truncate">{col.title}</span>
+                  </span>
+                  <Cell
+                    column={col}
+                    cell={cellMap.get(item.id)?.get(col.id)}
+                    onSave={(value) => onSaveCell(item.id, col.id, value)}
+                  />
+                </div>
+              );
+            })}
+            {columns.length === 0 && (
+              <p className="py-4 text-sm text-neutral-400">
+                No columns yet — add one from the board toolbar.
+              </p>
+            )}
+          </div>
+        )}
+        {tab === "updates" && <CommentsTab itemId={item.id} />}
+        {tab === "activity" && (
+          <ActivityTab itemId={item.id} columns={columns} />
+        )}
       </div>
     </aside>
   );

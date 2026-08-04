@@ -58,3 +58,17 @@ export function useItems(boardId: string) {
     queryFn: () => api.listItems(boardId),
   });
 }
+
+export function useComments(itemId: string) {
+  return useQuery({
+    queryKey: ["comments", itemId],
+    queryFn: () => api.listComments(itemId),
+  });
+}
+
+export function useItemActivity(itemId: string) {
+  return useQuery({
+    queryKey: ["activity", itemId],
+    queryFn: () => api.listItemActivity(itemId),
+  });
+}

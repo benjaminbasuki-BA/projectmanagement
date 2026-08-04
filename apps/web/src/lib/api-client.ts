@@ -141,6 +141,31 @@ export interface ColumnValue {
   updatedAt: string;
 }
 
+export interface Comment {
+  id: string;
+  itemId: string;
+  parentCommentId: string | null;
+  authorId: string;
+  authorName: string;
+  bodyText: string;
+  createdAt: string;
+  editedAt: string | null;
+  deletedAt: string | null;
+  reactions: { userId: string; emoji: string }[];
+}
+
+export interface ActivityEvent {
+  id: string;
+  boardId: string;
+  itemId: string | null;
+  actorId: string | null;
+  actorName: string | null;
+  eventType: string;
+  payload: Record<string, unknown>;
+  boardSeq: number;
+  createdAt: string;
+}
+
 // ---- Auth ----
 
 export function signup(input: {
@@ -383,4 +408,51 @@ export function updateColumnValues(
     `/v1/items/${itemId}/column-values`,
     { method: "PATCH", body: values },
   );
+}
+
+// ---- Comments ----
+
+export function listComments(itemId: string) {
+  return request<{ comments: Comment[] }>(`/v1/items/${itemId}/comments`);
+}
+
+export function createComment(
+  itemId: string,
+  input: { bodyText: string; parentCommentId?: string },
+) {
+  return request<{ comment: Comment }>(`/v1/items/${itemId}/comments`, {
+    method: "POST",
+    body: input,
+  });
+}
+
+export function updateComment(commentId: string, bodyText: string) {
+  return request<{ comment: Comment }>(`/v1/comments/${commentId}`, {
+    method: "PATCH",
+    body: { bodyText },
+  });
+}
+
+export function deleteComment(commentId: string) {
+  return request<void>(`/v1/comments/${commentId}`, { method: "DELETE" });
+}
+
+export function addReaction(commentId: string, emoji: string) {
+  return request<void>(
+    `/v1/comments/${commentId}/reactions/${encodeURIComponent(emoji)}`,
+    { method: "PUT" },
+  );
+}
+
+export function removeReaction(commentId: string, emoji: string) {
+  return request<void>(
+    `/v1/comments/${commentId}/reactions/${encodeURIComponent(emoji)}`,
+    { method: "DELETE" },
+  );
+}
+
+// ---- Activity ----
+
+export function listItemActivity(itemId: string) {
+  return request<{ events: ActivityEvent[] }>(`/v1/items/${itemId}/activity`);
 }
