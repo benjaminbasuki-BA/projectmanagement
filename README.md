@@ -164,5 +164,3 @@ trellis/
 ## Docs
 
 Read [`CLAUDE.md`](CLAUDE.md) before adding anything beyond what's already built — it states the current MVP-only scope and the free/no-billing constraint. For the full spec, start at [`docs/00-index.md`](docs/00-index.md).
-#   p r o j e c t m a n a g e m e n t  
- 
