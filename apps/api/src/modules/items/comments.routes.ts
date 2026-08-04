@@ -5,6 +5,7 @@ import {
   commentReactions,
   users,
   items,
+  orgMemberships,
 } from "../../db/schema/index.js";
 import { withTenantContext } from "../../db/tenant-db.js";
 import { getAccessibleBoard } from "../boards/index.js";
@@ -108,7 +109,7 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
       const { itemId } = request.params as { itemId: string };
       const { orgId } = request.tenant!;
       const userId = request.authSession!.user.id;
-      const { bodyText, parentCommentId } = parsed.data;
+      const { bodyText, parentCommentId, mentionedUserIds } = parsed.data;
 
       const outcome = await withTenantContext(app.db, orgId, async (tx) => {
         const item = await getAccessibleItemForComments(
@@ -165,8 +166,61 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
         // replies (and everyone else's) reach you too (02 §3.7).
         await subscribeToItem(tx, { orgId, itemId, userId, reason: "manual" });
 
-        const subscribers = await getItemSubscribers(tx, itemId);
-        const targets = await notifyUsers(tx, {
+        const actorName = request.authSession!.user.name;
+        const mailJobs: {
+          notificationId: string;
+          mail: ReturnType<typeof notificationMail>;
+        }[] = [];
+
+        // Validated against real org + board access (not just "an id the
+        // client sent") — otherwise mentioning someone outside a private
+        // board would leak that item's existence to them via email.
+        const validMentions = await resolveMentionable(
+          tx,
+          orgId,
+          item.boardId,
+          mentionedUserIds ?? [],
+        );
+        for (const mentionedId of validMentions) {
+          await subscribeToItem(tx, {
+            orgId,
+            itemId,
+            userId: mentionedId,
+            reason: "mentioned",
+          });
+        }
+        if (validMentions.length > 0) {
+          const mentionTargets = await notifyUsers(tx, {
+            orgId,
+            actorId: userId,
+            recipientUserIds: validMentions,
+            eventType: "mentioned",
+            itemId,
+            boardId: item.boardId,
+            commentId: created.id,
+            payload: { itemName: item.name, preview: preview(bodyText) },
+          });
+          for (const t of mentionTargets) {
+            mailJobs.push({
+              notificationId: t.notificationId,
+              mail: notificationMail(t.email, {
+                eventType: "mentioned",
+                actorName,
+                itemName: item.name,
+                preview: preview(bodyText),
+              }),
+            });
+          }
+        }
+
+        // Everyone else already subscribed to the thread gets the more
+        // generic "reply" notification — mentioned users got the more
+        // specific one above instead, not both.
+        const mentionedSet = new Set(validMentions);
+        const subscribers = (await getItemSubscribers(tx, itemId)).filter(
+          (id) => !mentionedSet.has(id),
+        );
+        const replyTargets = await notifyUsers(tx, {
           orgId,
           actorId: userId,
           recipientUserIds: subscribers,
@@ -176,15 +230,17 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
           commentId: created.id,
           payload: { itemName: item.name, preview: preview(bodyText) },
         });
-        const mailJobs = targets.map((t) => ({
-          notificationId: t.notificationId,
-          mail: notificationMail(t.email, {
-            eventType: "reply",
-            actorName: request.authSession!.user.name,
-            itemName: item.name,
-            preview: preview(bodyText),
-          }),
-        }));
+        for (const t of replyTargets) {
+          mailJobs.push({
+            notificationId: t.notificationId,
+            mail: notificationMail(t.email, {
+              eventType: "reply",
+              actorName,
+              itemName: item.name,
+              preview: preview(bodyText),
+            }),
+          });
+        }
 
         return { kind: "ok" as const, comment: created, mailJobs };
       });
@@ -438,6 +494,43 @@ async function getAccessibleItemForComments(
   if (!board) return null;
 
   return item;
+}
+
+/**
+ * Filters candidate mention ids down to real, active org members who can
+ * actually see this board. getAccessibleBoard's "open workspace ⇒
+ * everyone" shortcut only holds for callers already known to be org
+ * members (normally guaranteed by requireOrgContext) — an arbitrary
+ * candidate id hasn't earned that, so the org-membership check here has
+ * to run first, not be assumed.
+ */
+async function resolveMentionable(
+  tx: AppDb,
+  orgId: string,
+  boardId: string,
+  candidateIds: string[],
+): Promise<string[]> {
+  const unique = Array.from(new Set(candidateIds));
+  if (unique.length === 0) return [];
+
+  const members = await tx
+    .select({ userId: orgMemberships.userId })
+    .from(orgMemberships)
+    .where(
+      and(
+        eq(orgMemberships.orgId, orgId),
+        inArray(orgMemberships.userId, unique),
+        isNull(orgMemberships.deactivatedAt),
+      ),
+    );
+
+  const valid: string[] = [];
+  for (const { userId: candidateId } of members) {
+    if (!candidateId) continue;
+    const board = await getAccessibleBoard(tx, orgId, candidateId, boardId);
+    if (board) valid.push(candidateId);
+  }
+  return valid;
 }
 
 /** Board-accessible + not-deleted, for reactions (any board member can react). */

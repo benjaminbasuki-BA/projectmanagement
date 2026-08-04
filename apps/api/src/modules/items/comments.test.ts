@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { createTestDb } from "../../test/db.js";
 import { buildServer } from "../../server.js";
-import { signupWithWorkspace } from "../../test/helpers.js";
+import { signupWithWorkspace, addSecondOrgMember } from "../../test/helpers.js";
 import type { AppDb } from "../../db/types.js";
 
 async function setup(app: FastifyInstance, email: string, slug: string) {
@@ -223,5 +223,81 @@ describe("comments", () => {
     expect(activity.statusCode).toBe(200);
     const events = activity.json().events as { eventType: string }[];
     expect(events.some((e) => e.eventType === "comment.posted")).toBe(true);
+  });
+
+  it("mentioning a real org member notifies them once (mentioned, not also reply)", async () => {
+    const { cookie, orgId, itemId } = await setup(
+      app,
+      "c8a@test.dev",
+      "c8-org",
+    );
+    const b = await addSecondOrgMember(app, db, orgId, "c8b@test.dev");
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/items/${itemId}/comments`,
+      headers: { cookie },
+      payload: {
+        bodyText: "cc heads up",
+        mentionedUserIds: [b.userId],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+
+    const bNotifications = await app.inject({
+      method: "GET",
+      url: "/v1/notifications?unread=true",
+      headers: { cookie: b.cookie },
+    });
+    const events = bNotifications.json().notifications as {
+      eventType: string;
+    }[];
+    expect(events.filter((e) => e.eventType === "mentioned")).toHaveLength(1);
+    expect(events.filter((e) => e.eventType === "reply")).toHaveLength(0);
+  });
+
+  it("silently drops a mention id that isn't a real, accessible org member", async () => {
+    const { cookie, itemId } = await setup(app, "c9a@test.dev", "c9-org");
+    const stranger = await signupWithWorkspace(app, "c9b@test.dev", "c9b-org");
+
+    const withBadMention = await app.inject({
+      method: "POST",
+      url: `/v1/items/${itemId}/comments`,
+      headers: { cookie },
+      payload: {
+        bodyText: "cc a stranger",
+        mentionedUserIds: [stranger.orgId], // not even a user id, just garbage-shaped
+      },
+    });
+    // Doesn't fail the request — an invalid mention is dropped, not a hard error.
+    expect(withBadMention.statusCode).toBe(201);
+  });
+
+  it("org directory search only returns members of the caller's own org", async () => {
+    const { cookie, orgId } = await setup(app, "c10a@test.dev", "c10-org");
+    await addSecondOrgMember(app, db, orgId, "c10b@test.dev");
+    const other = await signupWithWorkspace(app, "c10c@test.dev", "c10c-org");
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/users?query=c10",
+      headers: { cookie },
+    });
+    const names = (res.json().users as { email: string }[]).map((u) => u.email);
+    expect(names).toContain("c10a@test.dev");
+    expect(names).toContain("c10b@test.dev");
+    expect(names).not.toContain("c10c@test.dev");
+
+    // A member of a *different* org matching the same query sees only
+    // themselves — not a.a1/b's org, even though the query matches all three.
+    const otherRes = await app.inject({
+      method: "GET",
+      url: "/v1/users?query=c10",
+      headers: { cookie: other.cookie },
+    });
+    const otherNames = (otherRes.json().users as { email: string }[]).map(
+      (u) => u.email,
+    );
+    expect(otherNames).toEqual(["c10c@test.dev"]);
   });
 });

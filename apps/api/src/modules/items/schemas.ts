@@ -29,9 +29,18 @@ export type UpdateColumnValuesInput = z.infer<typeof updateColumnValuesSchema>;
  * it into a minimal valid doc shape server-side (comments.routes.ts) —
  * forward-compatible with a real editor later without a data migration.
  */
+/**
+ * `mentionedUserIds` is explicit, not parsed out of `@Name` in the text —
+ * with a plain-text composer (no rich-text mention nodes yet), matching
+ * free text against names is ambiguous the moment two people share a
+ * first name. The composer's autocomplete already knows exactly which
+ * user was picked; the server just validates each id is someone the
+ * author could legitimately mention (comments.routes.ts).
+ */
 export const createCommentSchema = z.object({
   bodyText: z.string().trim().min(1).max(10_000),
   parentCommentId: z.string().uuid().optional(),
+  mentionedUserIds: z.array(z.string().uuid()).max(20).optional(),
 });
 export type CreateCommentInput = z.infer<typeof createCommentSchema>;
 

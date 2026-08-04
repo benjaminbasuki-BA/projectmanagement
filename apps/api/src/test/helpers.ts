@@ -1,4 +1,7 @@
 import type { FastifyInstance } from "fastify";
+import { orgMemberships } from "../db/schema/index.js";
+import { withTenantContext } from "../db/tenant-db.js";
+import type { AppDb } from "../db/types.js";
 
 export function extractCookie(setCookieHeader: string | string[] | undefined) {
   const header = Array.isArray(setCookieHeader)
@@ -16,6 +19,52 @@ export async function signup(app: FastifyInstance, email: string) {
     payload: { email, password: "correct-horse-battery", name: email },
   });
   return extractCookie(res.headers["set-cookie"]);
+}
+
+/** Signs up a fresh user without creating an org, returning their id too. */
+export async function signupPlain(app: FastifyInstance, email: string) {
+  const res = await app.inject({
+    method: "POST",
+    url: "/v1/auth/signup",
+    payload: {
+      email,
+      password: "correct-horse-battery",
+      name: email.split("@")[0],
+    },
+  });
+  return {
+    cookie: extractCookie(res.headers["set-cookie"]),
+    userId: res.json().user.id as string,
+  };
+}
+
+/**
+ * There's no org-invite endpoint yet (a real gap — see the notifications
+ * task's summary), so "a second real member of the same org" has to be
+ * set up directly against the test DB rather than through the HTTP API.
+ * Everything downstream of this still exercises real routes.
+ */
+export async function addOrgMember(db: AppDb, orgId: string, userId: string) {
+  await withTenantContext(db, orgId, (tx) =>
+    tx.insert(orgMemberships).values({ orgId, userId, role: "member" }),
+  );
+}
+
+/** signupPlain + addOrgMember + selecting that org as active, in one call. */
+export async function addSecondOrgMember(
+  app: FastifyInstance,
+  db: AppDb,
+  orgId: string,
+  email: string,
+) {
+  const b = await signupPlain(app, email);
+  await addOrgMember(db, orgId, b.userId);
+  await app.inject({
+    method: "POST",
+    url: `/v1/organizations/${orgId}/select`,
+    headers: { cookie: b.cookie },
+  });
+  return b;
 }
 
 /** Signs up a fresh user, creates an org for them, returns the cookie + orgId. */

@@ -1,10 +1,12 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, ilike, isNull, or } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import type { FastifyPluginAsync } from "fastify";
-import { organizations, orgMemberships } from "../../db/schema/index.js";
+import { organizations, orgMemberships, users } from "../../db/schema/index.js";
 import { withTenantContext } from "../../db/tenant-db.js";
 import { setActiveOrg } from "../auth/index.js";
 import { createOrganizationSchema } from "./schemas.js";
+
+const DIRECTORY_LIMIT = 20;
 
 /**
  * docs/04-api-design.md §2.2 documents `GET /org` / `PATCH /org` but no
@@ -120,6 +122,39 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
 
       await setActiveOrg(app.db, request.authSession!.sessionId, orgId);
       return reply.send({ activeOrgId: orgId, role: membership.role });
+    },
+  );
+
+  // docs/04 §2.2: "Org directory" — the @mention autocomplete source
+  // (items/comments.routes.ts validates mentions against this same
+  // membership join, so a mention can never target someone the query
+  // wouldn't have surfaced).
+  app.get(
+    "/users",
+    { preHandler: [app.authenticate, app.requireOrgContext] },
+    async (request, reply) => {
+      const { orgId } = request.tenant!;
+      const query = request.query as { query?: string };
+      const q = (query.query ?? "").trim();
+
+      const rows = await withTenantContext(app.db, orgId, (tx) =>
+        tx
+          .select({ id: users.id, name: users.name, email: users.email })
+          .from(users)
+          .innerJoin(orgMemberships, eq(orgMemberships.userId, users.id))
+          .where(
+            and(
+              eq(orgMemberships.orgId, orgId),
+              isNull(orgMemberships.deactivatedAt),
+              q
+                ? or(ilike(users.name, `%${q}%`), ilike(users.email, `%${q}%`))
+                : undefined,
+            ),
+          )
+          .limit(DIRECTORY_LIMIT),
+      );
+
+      return reply.send({ users: rows });
     },
   );
 };

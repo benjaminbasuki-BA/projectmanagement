@@ -166,6 +166,12 @@ export interface ActivityEvent {
   createdAt: string;
 }
 
+export interface OrgUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export interface Notification {
   id: string;
   eventType: string;
@@ -431,7 +437,11 @@ export function listComments(itemId: string) {
 
 export function createComment(
   itemId: string,
-  input: { bodyText: string; parentCommentId?: string },
+  input: {
+    bodyText: string;
+    parentCommentId?: string;
+    mentionedUserIds?: string[];
+  },
 ) {
   return request<{ comment: Comment }>(`/v1/items/${itemId}/comments`, {
     method: "POST",
@@ -499,4 +509,12 @@ export function muteBoard(boardId: string) {
 
 export function unmuteBoard(boardId: string) {
   return request<void>(`/v1/boards/${boardId}/mute`, { method: "DELETE" });
+}
+
+// ---- Org directory (@mention autocomplete) ----
+
+export function searchOrgUsers(query: string) {
+  return request<{ users: OrgUser[] }>(
+    `/v1/users?query=${encodeURIComponent(query)}`,
+  );
 }

@@ -2,38 +2,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { createTestDb } from "../../test/db.js";
 import { buildServer } from "../../server.js";
-import { signupWithWorkspace, extractCookie } from "../../test/helpers.js";
-import { orgMemberships } from "../../db/schema/index.js";
-import { withTenantContext } from "../../db/tenant-db.js";
+import { signupWithWorkspace, addSecondOrgMember } from "../../test/helpers.js";
 import type { AppDb } from "../../db/types.js";
-
-/**
- * There's no org-invite endpoint yet (a real gap — see the summary of
- * this task), so "a second person in the same org" is set up directly
- * against the test DB rather than through the HTTP API. Everything from
- * here down exercises real routes.
- */
-async function addOrgMember(db: AppDb, orgId: string, userId: string) {
-  await withTenantContext(db, orgId, (tx) =>
-    tx.insert(orgMemberships).values({ orgId, userId, role: "member" }),
-  );
-}
-
-async function signupPlain(app: FastifyInstance, email: string) {
-  const res = await app.inject({
-    method: "POST",
-    url: "/v1/auth/signup",
-    payload: {
-      email,
-      password: "correct-horse-battery",
-      name: email.split("@")[0],
-    },
-  });
-  return {
-    cookie: extractCookie(res.headers["set-cookie"]),
-    userId: res.json().user.id as string,
-  };
-}
 
 async function setup(
   app: FastifyInstance,
@@ -42,14 +12,7 @@ async function setup(
   slug: string,
 ) {
   const a = await signupWithWorkspace(app, emailA, slug);
-  const b = await signupPlain(app, `${slug}-b@test.dev`);
-  await addOrgMember(db, a.orgId, b.userId);
-  // Second signup leaves the session without an active org — select it.
-  await app.inject({
-    method: "POST",
-    url: `/v1/organizations/${a.orgId}/select`,
-    headers: { cookie: b.cookie },
-  });
+  const b = await addSecondOrgMember(app, db, a.orgId, `${slug}-b@test.dev`);
 
   const boardRes = await app.inject({
     method: "POST",
