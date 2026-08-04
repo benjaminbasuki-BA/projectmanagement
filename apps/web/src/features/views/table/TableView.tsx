@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
@@ -39,12 +39,7 @@ import {
   cn,
 } from "@trellis/ui";
 import * as api from "../../../lib/api-client";
-import type {
-  Column,
-  ColumnValue,
-  Group,
-  Item,
-} from "../../../lib/api-client";
+import type { Column, ColumnValue, Group, Item } from "../../../lib/api-client";
 import { positionBetween } from "../../../lib/position";
 import { Cell, COLUMN_TYPE_META, ColumnTypeMenuItems } from "../../items/cells";
 
@@ -90,7 +85,13 @@ export function TableView({
     widths[col.id] ?? col.width ?? DEFAULT_COL_WIDTH;
 
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  useEffect(() => setSelected(new Set()), [boardId]);
+  // Reset during render rather than in an effect — see CommandMenu.tsx for
+  // why (React's documented pattern for state derived from a prop change).
+  const [selectedForBoard, setSelectedForBoard] = useState(boardId);
+  if (boardId !== selectedForBoard) {
+    setSelectedForBoard(boardId);
+    setSelected(new Set());
+  }
 
   // Editorial framing, instrument density on demand (design.md §5.3):
   // the grid tightens when you're working in it, without the page around
@@ -159,13 +160,8 @@ export function TableView({
 
   // Reorder = one fractional-position write (docs/02 §0), optimistic.
   const moveItem = useMutation({
-    mutationFn: ({
-      itemId,
-      position,
-    }: {
-      itemId: string;
-      position: string;
-    }) => api.updateItem(itemId, { position }),
+    mutationFn: ({ itemId, position }: { itemId: string; position: string }) =>
+      api.updateItem(itemId, { position }),
     onMutate: async ({ itemId, position }) => {
       await queryClient.cancelQueries({ queryKey: ["items", boardId] });
       const prev = queryClient.getQueryData<ItemsPayload>(["items", boardId]);
@@ -288,34 +284,39 @@ export function TableView({
               {selected.size} selected
             </span>
             <div className="mx-2 h-5 w-px bg-neutral-200" />
-            {statusColumn && (statusColumn.settings.labels?.length ?? 0) > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm">
-                    Set status
-                    <ChevronDown size={13} className="opacity-60" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="center" side="top" className="w-44">
-                  {statusColumn.settings.labels!.map((l) => (
-                    <DropdownMenuItem
-                      key={l.id}
-                      onSelect={() => {
-                        for (const id of selected) {
-                          onSaveCell(id, statusColumn.id, { label_id: l.id });
-                        }
-                      }}
-                    >
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: l.color }}
-                      />
-                      {l.text}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            {statusColumn &&
+              (statusColumn.settings.labels?.length ?? 0) > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      Set status
+                      <ChevronDown size={13} className="opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="center"
+                    side="top"
+                    className="w-44"
+                  >
+                    {statusColumn.settings.labels!.map((l) => (
+                      <DropdownMenuItem
+                        key={l.id}
+                        onSelect={() => {
+                          for (const id of selected) {
+                            onSaveCell(id, statusColumn.id, { label_id: l.id });
+                          }
+                        }}
+                      >
+                        <span
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: l.color }}
+                        />
+                        {l.text}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             <Button
               variant="ghost"
               size="sm"
@@ -397,8 +398,7 @@ function GroupSection({
     for (const item of items) {
       const labelId = (
         cellMap.get(item.id)?.get(statusColumn.id)?.value as
-          | { label_id?: string }
-          | undefined
+          { label_id?: string } | undefined
       )?.label_id;
       if (labelId) counts.set(labelId, (counts.get(labelId) ?? 0) + 1);
     }
@@ -467,7 +467,8 @@ function GroupSection({
                   onClick={() => onPatchGroup(group.id, { color: c })}
                   className={cn(
                     "h-4 w-4 rounded-sm transition-transform hover:scale-125",
-                    c === group.color && "ring-2 ring-neutral-400 ring-offset-1",
+                    c === group.color &&
+                      "ring-2 ring-neutral-400 ring-offset-1",
                   )}
                   style={{ backgroundColor: c }}
                 />
@@ -665,7 +666,9 @@ function ColumnHeader({
         />
       ) : (
         <span className="flex items-center gap-1.5">
-          {meta && <meta.Icon size={13} className="shrink-0 text-neutral-400" />}
+          {meta && (
+            <meta.Icon size={13} className="shrink-0 text-neutral-400" />
+          )}
           <span className="truncate">{column.title}</span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

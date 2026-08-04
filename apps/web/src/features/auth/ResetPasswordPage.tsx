@@ -60,7 +60,10 @@ export function ResetPasswordPage() {
       title="Choose a new password"
       subtitle="Setting a new password signs you out everywhere else."
       footer={
-        <Link to="/login" className="font-medium text-deep underline underline-offset-2 hover:text-ink">
+        <Link
+          to="/login"
+          className="font-medium text-deep underline underline-offset-2 hover:text-ink"
+        >
           Back to sign in
         </Link>
       }
@@ -86,7 +89,10 @@ export function ResetPasswordPage() {
               id="password"
               autoFocus
               type={show ? "text" : "password"}
-              className={cn("h-11 pr-11", touched && tooShort && "border-danger")}
+              className={cn(
+                "h-11 pr-11",
+                touched && tooShort && "border-danger",
+              )}
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

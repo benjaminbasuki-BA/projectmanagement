@@ -9,7 +9,6 @@ import {
   PanelLeftClose,
   Plus,
   Search,
-  SquareKanban,
 } from "lucide-react";
 import {
   Avatar,
@@ -289,7 +288,12 @@ function Sidebar({
 
       {/* Pinned nav */}
       <nav className={cn("space-y-0.5 pt-4", collapsed ? "px-2" : "px-3")}>
-        <NavLink to="/" end title="Home" className={({ isActive }) => navItemCls(isActive)}>
+        <NavLink
+          to="/"
+          end
+          title="Home"
+          className={({ isActive }) => navItemCls(isActive)}
+        >
           <Home size={15} className="shrink-0" />
           {!collapsed && "Home"}
         </NavLink>

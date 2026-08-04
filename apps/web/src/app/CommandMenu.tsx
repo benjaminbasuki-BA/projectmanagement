@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Home,
@@ -46,12 +46,17 @@ export function CommandMenu({
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
 
-  useEffect(() => {
+  // Resetting during render (React's documented pattern for state that
+  // depends on a prop) rather than in an effect — an effect here would
+  // commit the still-stale query/active for one frame before clearing.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setQuery("");
       setActive(0);
     }
-  }, [open]);
+  }
 
   const commands = useMemo<Command[]>(
     () => [
@@ -89,7 +94,14 @@ export function CommandMenu({
         run: onToggleSidebar,
       },
     ],
-    [boards, workspaces, workspace?.id, navigate, onSelectWorkspace, onToggleSidebar],
+    [
+      boards,
+      workspaces,
+      workspace?.id,
+      navigate,
+      onSelectWorkspace,
+      onToggleSidebar,
+    ],
   );
 
   const filtered = useMemo(() => {

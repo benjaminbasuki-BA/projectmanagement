@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
 import {
   Button,
   Input,
@@ -95,8 +94,8 @@ export function HomePage() {
             Create your first workspace
           </h2>
           <p className="mb-4 text-sm text-neutral-500">
-            Workspaces group related boards — one per team or department
-            usually works well.
+            Workspaces group related boards — one per team or department usually
+            works well.
           </p>
           <form
             className="flex gap-2"
@@ -160,11 +159,11 @@ function StatRow({ workspaceId }: { workspaceId: string }) {
     const today = new Date().toISOString().slice(0, 10);
 
     for (let i = 0; i < boards.length; i++) {
-      const columns = (results[i * 2]?.data as { columns: Column[] } | undefined)
-        ?.columns;
+      const columns = (
+        results[i * 2]?.data as { columns: Column[] } | undefined
+      )?.columns;
       const itemsData = results[i * 2 + 1]?.data as
-        | { items: Item[]; columnValues: ColumnValue[] }
-        | undefined;
+        { items: Item[]; columnValues: ColumnValue[] } | undefined;
       if (!columns || !itemsData) continue;
 
       const statusCol = columns.find((c) => c.type === "status");

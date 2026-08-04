@@ -16,7 +16,8 @@ const OAUTH_ERRORS: Record<string, string> = {
   bad_state:
     "That sign-in attempt couldn't be verified. Please try signing in again.",
   missing_code: "Google didn't complete the sign-in. Please try again.",
-  token_exchange_failed: "We couldn't reach Google just then. Please try again.",
+  token_exchange_failed:
+    "We couldn't reach Google just then. Please try again.",
   userinfo_failed: "We couldn't read your Google profile. Please try again.",
   email_unverified:
     "That Google account's email isn't verified, so we can't use it to sign in.",
@@ -170,9 +171,7 @@ export function AuthPage({ mode }: { mode: "login" | "signup" }) {
         <Field
           label="Password"
           htmlFor="password"
-          hint={
-            isSignup ? `At least ${minLength} characters` : undefined
-          }
+          hint={isSignup ? `At least ${minLength} characters` : undefined}
           error={
             touched && passwordTooShort
               ? `Use at least ${minLength} characters.`
@@ -235,8 +234,8 @@ export function AuthPage({ mode }: { mode: "login" | "signup" }) {
 
       {isSignup && (
         <p className="mt-4 text-xs leading-relaxed text-ink-muted">
-          By creating an account you agree to keep client data you upload
-          within your organisation's own policies.
+          By creating an account you agree to keep client data you upload within
+          your organisation's own policies.
         </p>
       )}
     </AuthLayout>

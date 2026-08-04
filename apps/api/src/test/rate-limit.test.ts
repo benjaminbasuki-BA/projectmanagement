@@ -18,7 +18,10 @@ describe("auth rate limiting", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("DATABASE_URL", "postgres://unused/unused");
     vi.stubEnv("APP_DATABASE_URL", "postgres://unused/unused");
-    vi.stubEnv("TOTP_ENCRYPTION_KEY", "cmFuZG9tLTMyLWJ5dGUtdmFsdWUtZm9yLXRlc3RzISE=");
+    vi.stubEnv(
+      "TOTP_ENCRYPTION_KEY",
+      "cmFuZG9tLTMyLWJ5dGUtdmFsdWUtZm9yLXRlc3RzISE=",
+    );
     const { buildServer } = await import("../server.js");
     app = await buildServer(await createTestDb());
   });

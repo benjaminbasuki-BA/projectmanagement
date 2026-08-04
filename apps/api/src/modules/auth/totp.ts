@@ -1,5 +1,9 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { generateSecret as otpGenerateSecret, generateURI, verifySync } from "otplib";
+import {
+  generateSecret as otpGenerateSecret,
+  generateURI,
+  verifySync,
+} from "otplib";
 import { env } from "../../config/env.js";
 
 /**

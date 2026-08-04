@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  ChevronRight,
-  Plus,
-  Search,
-  SquareKanban,
-  Table,
-} from "lucide-react";
+import { ChevronRight, Plus, Search, SquareKanban, Table } from "lucide-react";
 import {
   Button,
   DropdownMenu,

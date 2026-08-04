@@ -15,7 +15,9 @@ async function req(path, method = "GET", body) {
   if (sc.length) cookie = sc.map((c) => c.split(";")[0]).join("; ");
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok)
-    throw new Error(`${method} ${path} -> ${res.status}: ${JSON.stringify(data)}`);
+    throw new Error(
+      `${method} ${path} -> ${res.status}: ${JSON.stringify(data)}`,
+    );
   return data;
 }
 
@@ -29,8 +31,18 @@ const DEV_USER = {
 // (design.md §3.3).
 const STATUS_SETTINGS = {
   labels: [
-    { id: "lbl_not_started", text: "Not started", color: "#A39A8D", is_done: false },
-    { id: "lbl_working", text: "Working on it", color: "#E08A1E", is_done: false },
+    {
+      id: "lbl_not_started",
+      text: "Not started",
+      color: "#A39A8D",
+      is_done: false,
+    },
+    {
+      id: "lbl_working",
+      text: "Working on it",
+      color: "#E08A1E",
+      is_done: false,
+    },
     { id: "lbl_stuck", text: "Stuck", color: "#C4432F", is_done: false },
     { id: "lbl_done", text: "Done", color: "#4E8A5C", is_done: true },
   ],
@@ -47,7 +59,10 @@ const PRIORITY_SETTINGS = {
 
 // Auth (login, or first-run signup)
 try {
-  await req("/v1/auth/login", "POST", { email: DEV_USER.email, password: DEV_USER.password });
+  await req("/v1/auth/login", "POST", {
+    email: DEV_USER.email,
+    password: DEV_USER.password,
+  });
   console.log("logged in");
 } catch {
   await req("/v1/auth/signup", "POST", DEV_USER);
@@ -57,7 +72,10 @@ try {
 // Org
 const me = await req("/v1/auth/me");
 if (!me.activeOrgId) {
-  await req("/v1/organizations", "POST", { name: "BYU-Hawaii", slug: "byu-hawaii" });
+  await req("/v1/organizations", "POST", {
+    name: "BYU-Hawaii",
+    slug: "byu-hawaii",
+  });
   console.log("created org BYU-Hawaii");
 }
 
@@ -75,13 +93,21 @@ async function makeBoard(name, extraColumns = [], items = []) {
     console.log(`board ${name} already exists, skipping`);
     return;
   }
-  const { board } = await req(`/v1/workspaces/${ws.id}/boards`, "POST", { name });
-  const { group } = await req(`/v1/boards/${board.id}/groups`, "POST", { title: "Group 1" });
-  const { column: statusCol } = await req(`/v1/boards/${board.id}/columns`, "POST", {
-    title: "Status",
-    type: "status",
-    settings: STATUS_SETTINGS,
+  const { board } = await req(`/v1/workspaces/${ws.id}/boards`, "POST", {
+    name,
   });
+  const { group } = await req(`/v1/boards/${board.id}/groups`, "POST", {
+    title: "Group 1",
+  });
+  const { column: statusCol } = await req(
+    `/v1/boards/${board.id}/columns`,
+    "POST",
+    {
+      title: "Status",
+      type: "status",
+      settings: STATUS_SETTINGS,
+    },
+  );
   const colIds = { status: statusCol.id };
   for (const c of extraColumns) {
     const { column } = await req(`/v1/boards/${board.id}/columns`, "POST", {
@@ -133,43 +159,92 @@ await makeBoard(
   [
     {
       name: "Dell XPS 15 — Lab 2 refresh",
-      values: { status: status("lbl_working"), owner: text("K. Nakamura"), due: date("2026-07-24"), qty: number(12) },
+      values: {
+        status: status("lbl_working"),
+        owner: text("K. Nakamura"),
+        due: date("2026-07-24"),
+        qty: number(12),
+      },
     },
     {
       name: "MacBook Air M3 — front desk",
-      values: { status: status("lbl_done"), owner: text("T. Fonoti"), due: date("2026-07-10"), qty: number(2) },
+      values: {
+        status: status("lbl_done"),
+        owner: text("T. Fonoti"),
+        due: date("2026-07-10"),
+        qty: number(2),
+      },
     },
     {
       name: "ThinkPad T14 warranty claims",
-      values: { status: status("lbl_stuck"), owner: text("M. Reyes"), due: date("2026-07-31"), qty: number(5) },
+      values: {
+        status: status("lbl_stuck"),
+        owner: text("M. Reyes"),
+        due: date("2026-07-31"),
+        qty: number(5),
+      },
     },
     {
       name: "Loaner pool reimage",
-      values: { status: status("lbl_not_started"), due: date("2026-08-07"), qty: number(18) },
+      values: {
+        status: status("lbl_not_started"),
+        due: date("2026-08-07"),
+        qty: number(18),
+      },
     },
     {
       name: "Surface Laptop 5 — Registrar office",
-      values: { status: status("lbl_stuck"), owner: text("L. Pulotu"), due: date("2026-07-22"), qty: number(4) },
+      values: {
+        status: status("lbl_stuck"),
+        owner: text("L. Pulotu"),
+        due: date("2026-07-22"),
+        qty: number(4),
+      },
     },
     {
       name: "HP EliteBook restock — IT storeroom",
-      values: { status: status("lbl_not_started"), owner: text("K. Nakamura"), due: date("2026-08-14"), qty: number(20) },
+      values: {
+        status: status("lbl_not_started"),
+        owner: text("K. Nakamura"),
+        due: date("2026-08-14"),
+        qty: number(20),
+      },
     },
     {
       name: "Chromebook cart — Library instruction room",
-      values: { status: status("lbl_done"), owner: text("T. Fonoti"), due: date("2026-07-05"), qty: number(30) },
+      values: {
+        status: status("lbl_done"),
+        owner: text("T. Fonoti"),
+        due: date("2026-07-05"),
+        qty: number(30),
+      },
     },
     {
       name: "MacBook Pro 14 — Media Services",
-      values: { status: status("lbl_working"), owner: text("M. Reyes"), due: date("2026-07-26"), qty: number(3) },
+      values: {
+        status: status("lbl_working"),
+        owner: text("M. Reyes"),
+        due: date("2026-07-26"),
+        qty: number(3),
+      },
     },
     {
       name: "Lenovo ThinkPad X1 — President's office",
-      values: { status: status("lbl_done"), owner: text("L. Pulotu"), due: date("2026-07-01"), qty: number(1) },
+      values: {
+        status: status("lbl_done"),
+        owner: text("L. Pulotu"),
+        due: date("2026-07-01"),
+        qty: number(1),
+      },
     },
     {
       name: "Battery replacement batch — Housing laptops",
-      values: { status: status("lbl_stuck"), owner: text("K. Nakamura"), due: date("2026-07-29"), qty: number(9) },
+      values: {
+        status: status("lbl_stuck"),
+        owner: text("K. Nakamura"),
+        due: date("2026-07-29"),
+        qty: number(9),
+      },
     },
   ],
 );
@@ -178,12 +253,48 @@ await makeBoard(
   "Projector",
   [{ key: "room", title: "Room", type: "text" }],
   [
-    { name: "Auditorium lamp replacement", values: { status: status("lbl_working"), room: text("Cannon Activities Center") } },
-    { name: "Room 114 ceiling mount", values: { status: status("lbl_not_started"), room: text("McKay Building") } },
-    { name: "Business building Rm 201 bulb", values: { status: status("lbl_done"), room: text("Cannon Business Bldg") } },
-    { name: "Science building projector calibration", values: { status: status("lbl_stuck"), room: text("Hawaii Science Bldg") } },
-    { name: "Chapel AV projector swap", values: { status: status("lbl_done"), room: text("David O. McKay Chapel") } },
-    { name: "Testing center projector install", values: { status: status("lbl_not_started"), room: text("HGB Testing Center") } },
+    {
+      name: "Auditorium lamp replacement",
+      values: {
+        status: status("lbl_working"),
+        room: text("Cannon Activities Center"),
+      },
+    },
+    {
+      name: "Room 114 ceiling mount",
+      values: {
+        status: status("lbl_not_started"),
+        room: text("McKay Building"),
+      },
+    },
+    {
+      name: "Business building Rm 201 bulb",
+      values: {
+        status: status("lbl_done"),
+        room: text("Cannon Business Bldg"),
+      },
+    },
+    {
+      name: "Science building projector calibration",
+      values: {
+        status: status("lbl_stuck"),
+        room: text("Hawaii Science Bldg"),
+      },
+    },
+    {
+      name: "Chapel AV projector swap",
+      values: {
+        status: status("lbl_done"),
+        room: text("David O. McKay Chapel"),
+      },
+    },
+    {
+      name: "Testing center projector install",
+      values: {
+        status: status("lbl_not_started"),
+        room: text("HGB Testing Center"),
+      },
+    },
   ],
 );
 
@@ -191,29 +302,109 @@ await makeBoard(
   "Desktop",
   [{ key: "location", title: "Location", type: "text" }],
   [
-    { name: "Testing center thin clients", values: { status: status("lbl_done"), location: text("HGB Testing Center") } },
-    { name: "Library kiosk upgrades", values: { status: status("lbl_working"), location: text("Joseph F. Smith Library") } },
-    { name: "Financial Office desktop refresh", values: { status: status("lbl_not_started"), location: text("Alumni & Visitor Center") } },
-    { name: "Admissions front desk iMacs", values: { status: status("lbl_done"), location: text("McKay Building") } },
-    { name: "Career Center workstation repair", values: { status: status("lbl_stuck"), location: text("McKay Building") } },
-    { name: "Bookstore POS desktop swap", values: { status: status("lbl_working"), location: text("Aloha Center") } },
+    {
+      name: "Testing center thin clients",
+      values: {
+        status: status("lbl_done"),
+        location: text("HGB Testing Center"),
+      },
+    },
+    {
+      name: "Library kiosk upgrades",
+      values: {
+        status: status("lbl_working"),
+        location: text("Joseph F. Smith Library"),
+      },
+    },
+    {
+      name: "Financial Office desktop refresh",
+      values: {
+        status: status("lbl_not_started"),
+        location: text("Alumni & Visitor Center"),
+      },
+    },
+    {
+      name: "Admissions front desk iMacs",
+      values: { status: status("lbl_done"), location: text("McKay Building") },
+    },
+    {
+      name: "Career Center workstation repair",
+      values: { status: status("lbl_stuck"), location: text("McKay Building") },
+    },
+    {
+      name: "Bookstore POS desktop swap",
+      values: { status: status("lbl_working"), location: text("Aloha Center") },
+    },
   ],
 );
 
 await makeBoard(
   "Network Equipment",
   [
-    { key: "priority", title: "Priority", type: "dropdown", settings: PRIORITY_SETTINGS },
+    {
+      key: "priority",
+      title: "Priority",
+      type: "dropdown",
+      settings: PRIORITY_SETTINGS,
+    },
     { key: "location", title: "Location", type: "text" },
     { key: "installed", title: "Installed", type: "date" },
   ],
   [
-    { name: "Switch replacement — TVA building", values: { status: status("lbl_working"), priority: priority("opt_high"), location: text("TVA Building"), installed: date("2026-06-02") } },
-    { name: "Wireless AP install — Aloha Center", values: { status: status("lbl_done"), priority: priority("opt_medium"), location: text("Aloha Center"), installed: date("2026-05-14") } },
-    { name: "Firewall firmware update — Data center", values: { status: status("lbl_stuck"), priority: priority("opt_critical"), location: text("Data Center"), installed: date("2026-07-18") } },
-    { name: "Fiber run — Heber J. Grant Building", values: { status: status("lbl_not_started"), priority: priority("opt_medium"), location: text("HGB"), installed: date("2026-08-01") } },
-    { name: "VPN concentrator upgrade", values: { status: status("lbl_working"), priority: priority("opt_high"), location: text("Data Center"), installed: date("2026-07-25") } },
-    { name: "Campus wifi survey — dorms", values: { status: status("lbl_not_started"), priority: priority("opt_low"), location: text("Hales"), installed: date("2026-08-20") } },
+    {
+      name: "Switch replacement — TVA building",
+      values: {
+        status: status("lbl_working"),
+        priority: priority("opt_high"),
+        location: text("TVA Building"),
+        installed: date("2026-06-02"),
+      },
+    },
+    {
+      name: "Wireless AP install — Aloha Center",
+      values: {
+        status: status("lbl_done"),
+        priority: priority("opt_medium"),
+        location: text("Aloha Center"),
+        installed: date("2026-05-14"),
+      },
+    },
+    {
+      name: "Firewall firmware update — Data center",
+      values: {
+        status: status("lbl_stuck"),
+        priority: priority("opt_critical"),
+        location: text("Data Center"),
+        installed: date("2026-07-18"),
+      },
+    },
+    {
+      name: "Fiber run — Heber J. Grant Building",
+      values: {
+        status: status("lbl_not_started"),
+        priority: priority("opt_medium"),
+        location: text("HGB"),
+        installed: date("2026-08-01"),
+      },
+    },
+    {
+      name: "VPN concentrator upgrade",
+      values: {
+        status: status("lbl_working"),
+        priority: priority("opt_high"),
+        location: text("Data Center"),
+        installed: date("2026-07-25"),
+      },
+    },
+    {
+      name: "Campus wifi survey — dorms",
+      values: {
+        status: status("lbl_not_started"),
+        priority: priority("opt_low"),
+        location: text("Hales"),
+        installed: date("2026-08-20"),
+      },
+    },
   ],
 );
 

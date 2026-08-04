@@ -88,7 +88,12 @@ export function StatusDistribution({
   total,
   className,
 }: {
-  segments: readonly { id: string; text: string; color: string; count: number }[];
+  segments: readonly {
+    id: string;
+    text: string;
+    color: string;
+    count: number;
+  }[];
   total: number;
   className?: string;
 }) {

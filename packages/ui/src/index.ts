@@ -35,4 +35,9 @@ export {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "./dropdown-menu";
-export { Popover, PopoverTrigger, PopoverClose, PopoverContent } from "./popover";
+export {
+  Popover,
+  PopoverTrigger,
+  PopoverClose,
+  PopoverContent,
+} from "./popover";

@@ -64,8 +64,7 @@ export function KanbanView({
     statusColumn
       ? (
           cellMap.get(itemId)?.get(statusColumn.id)?.value as
-            | { label_id?: string }
-            | undefined
+            { label_id?: string } | undefined
         )?.label_id
       : undefined;
 
@@ -331,8 +330,7 @@ function CardBody({
   const date = dateColumn
     ? (
         cellMap.get(item.id)?.get(dateColumn.id)?.value as
-          | { date?: string }
-          | undefined
+          { date?: string } | undefined
       )?.date
     : undefined;
   const person = personColumn

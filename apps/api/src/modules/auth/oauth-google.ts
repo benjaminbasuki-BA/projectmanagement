@@ -151,12 +151,7 @@ export const googleOAuthRoutes: FastifyPluginAsync = async (app) => {
   // Present so a misconfigured client gets a clear answer rather than a
   // silent 404 on the POST-style path some SDKs assume.
   app.post("/auth/oauth/google/callback", async (_request, reply) =>
-    problem(
-      reply,
-      405,
-      "method-not-allowed",
-      "Use GET for the OAuth callback",
-    ),
+    problem(reply, 405, "method-not-allowed", "Use GET for the OAuth callback"),
   );
 };
 

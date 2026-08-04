@@ -83,12 +83,21 @@ export function AvatarStack({
   return (
     <div className="flex items-center -space-x-2">
       {shown.map((n, i) => (
-        <Avatar key={`${n}-${i}`} name={n} size={size} className="ring-2 ring-sheet" />
+        <Avatar
+          key={`${n}-${i}`}
+          name={n}
+          size={size}
+          className="ring-2 ring-sheet"
+        />
       ))}
       {overflow > 0 && (
         <span
           className="flex items-center justify-center rounded-full bg-neutral-200 font-medium text-neutral-600 ring-2 ring-sheet"
-          style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }}
+          style={{
+            width: size,
+            height: size,
+            fontSize: Math.round(size * 0.38),
+          }}
         >
           +{overflow}
         </span>

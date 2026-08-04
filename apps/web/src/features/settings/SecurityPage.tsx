@@ -50,7 +50,10 @@ export function SecurityPage() {
         </dl>
       </section>
 
-      <TwoFactorSection enabled={me.twoFactorEnabled} hasPassword={me.hasPassword} />
+      <TwoFactorSection
+        enabled={me.twoFactorEnabled}
+        hasPassword={me.hasPassword}
+      />
     </div>
   );
 }
@@ -181,10 +184,7 @@ function TwoFactorSection({
               </div>
             </li>
             <li>
-              <label
-                htmlFor="totp"
-                className="text-sm font-medium text-ink"
-              >
+              <label htmlFor="totp" className="text-sm font-medium text-ink">
                 2. Enter the 6-digit code it shows
               </label>
               <div className="mt-2 flex items-center gap-3">

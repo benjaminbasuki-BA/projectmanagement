@@ -186,7 +186,10 @@ describe("password reset", () => {
     const raw = "expired-token";
     await db
       .update(passwordResetTokens)
-      .set({ tokenHash: hashToken(raw), expiresAt: new Date(Date.now() - 1000) })
+      .set({
+        tokenHash: hashToken(raw),
+        expiresAt: new Date(Date.now() - 1000),
+      })
       .where(eq(passwordResetTokens.id, row.id));
 
     const res = await app.inject({
@@ -341,7 +344,9 @@ describe("two-factor authentication", () => {
       method: "POST",
       url: "/v1/auth/2fa/enable",
       headers: { cookie: session },
-      payload: { code: generateSync({ strategy: "totp", secret: freshSecret }) },
+      payload: {
+        code: generateSync({ strategy: "totp", secret: freshSecret }),
+      },
     });
     const recoveryCode = enable.json().recoveryCodes[0] as string;
 

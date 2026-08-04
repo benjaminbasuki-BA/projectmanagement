@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A second push to the same branch/PR cancels whatever CI run is already
+# in flight for it — no point finishing a check on code that's already
+# been superseded.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Pinned to a commit SHA rather than a mutable tag (supply-chain
+      # hygiene for third-party actions — GitHub's own actions below are
+      # pinned by major version, which is the normal trust boundary).
+      - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
+        with:
+          # Matches the "packageManager" field in package.json — kept in
+          # sync manually since actions/setup-node's pnpm cache step below
+          # needs pnpm on PATH before it can resolve the lockfile.
+          version: 11.10.0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+
+      - run: pnpm test
+        env:
+          # api/src/config/env.ts requires these to be set even though the
+          # test suite never actually connects — every test builds its own
+          # server against an in-memory PGlite instance (test/db.ts), never
+          # apps/api/src/db/client.ts. Values just need to satisfy the
+          # non-empty-string check.
+          DATABASE_URL: postgres://unused/unused
+          APP_DATABASE_URL: postgres://unused/unused
+
+      - run: pnpm build

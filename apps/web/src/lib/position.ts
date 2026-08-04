@@ -36,7 +36,8 @@ export function positionBetween(
         // later head-insert) — commit it and pick a real digit deeper.
         prefix += ALPHA[0];
         loActive = false; // strictly above any exhausted/absent `a`
-        if (hi > 0) hiActive = hiActive && i < b!.length && ALPHA.indexOf(b![i]!) === 0;
+        if (hi > 0)
+          hiActive = hiActive && i < b!.length && ALPHA.indexOf(b![i]!) === 0;
         i++;
         continue;
       }

@@ -22,8 +22,9 @@ export function ForgotPasswordPage() {
         title="Check your email"
         subtitle={
           <>
-            If an account exists for <strong className="text-ink">{email}</strong>,
-            a reset link is on its way. It expires in an hour.
+            If an account exists for{" "}
+            <strong className="text-ink">{email}</strong>, a reset link is on
+            its way. It expires in an hour.
           </>
         }
         footer={
@@ -58,7 +59,10 @@ export function ForgotPasswordPage() {
       title="Reset your password"
       subtitle="We'll email you a link to set a new one."
       footer={
-        <Link to="/login" className="font-medium text-deep underline underline-offset-2 hover:text-ink">
+        <Link
+          to="/login"
+          className="font-medium text-deep underline underline-offset-2 hover:text-ink"
+        >
           Back to sign in
         </Link>
       }

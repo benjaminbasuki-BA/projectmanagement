@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-
 /**
  * Shared chrome for every unauthenticated screen. Opens like a letterhead —
  * wordmark, rule, then the title in the document voice — so a signed-out

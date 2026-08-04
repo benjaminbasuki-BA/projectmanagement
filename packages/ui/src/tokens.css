@@ -13,8 +13,7 @@
   /* Type: one superfamily, three voices (design.md §4).
      Serif = the document voice (titles). Sans = the interface voice.
      Mono = values — dates, ids, counts, anything read as a number. */
-  --font-serif:
-    "IBM Plex Serif", Constantia, "Sitka Text", Georgia, serif;
+  --font-serif: "IBM Plex Serif", Constantia, "Sitka Text", Georgia, serif;
   --font-sans:
     "IBM Plex Sans", "Segoe UI Variable Text", "Segoe UI", ui-sans-serif,
     system-ui, -apple-system, sans-serif;

@@ -2,7 +2,11 @@ import { cn } from "./cn";
 
 export function Spinner({ className = "h-5 w-5 text-brand-600" }) {
   return (
-    <svg className={cn("animate-spin", className)} viewBox="0 0 24 24" fill="none">
+    <svg
+      className={cn("animate-spin", className)}
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <circle
         className="opacity-25"
         cx="12"
