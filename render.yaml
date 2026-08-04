@@ -1,0 +1,87 @@
+# Render Blueprint for the Trellis staging environment: managed Postgres
+# + the `api` container (built from apps/api/Dockerfile). Deploy by
+# connecting this repo in the Render dashboard (New > Blueprint) — Render
+# reads this file automatically.
+#
+# `ws-gateway` and `worker` aren't listed here because those processes
+# don't exist yet (see apps/api/Dockerfile's header comment).
+#
+# --- One-time manual step after the first deploy, before this is used
+# for anything real ---
+# drizzle/0002_tenancy_and_rls.sql creates a Postgres role `app_user`
+# with a hardcoded dev password (documented in that file as dev-only,
+# rotated in production via secrets management — never via migration
+# history). Render's managed Postgres only exposes one connection string
+# (the owner role), so:
+#   1. First deploy runs with APP_DATABASE_URL unset/wrong — expected.
+#   2. Run migrations once against DATABASE_URL (see apps/api/Dockerfile's
+#      CMD comment for the exact command), which creates `app_user`.
+#   3. Connect with `psql "$DATABASE_URL"` and run:
+#        ALTER ROLE app_user PASSWORD '<a-strong-random-value>';
+#   4. In the Render dashboard, set APP_DATABASE_URL on the api service to
+#      DATABASE_URL with the user/password swapped to app_user/<that
+#      value> — same host, port, and database name.
+#   5. Redeploy (or the service restarts and picks it up).
+# Skipping this ships staging with a publicly-known database password.
+
+databases:
+  - name: trellis-staging-db
+    databaseName: trellis
+    user: trellis
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: trellis-api-staging
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      # Migration-owner connection — wired automatically from the database
+      # above.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trellis-staging-db
+          property: connectionString
+      # Runtime connection as app_user — NOT auto-wired, see the runbook
+      # above. Set manually in the dashboard after step 4.
+      - key: APP_DATABASE_URL
+        sync: false
+      # Set once the web app has a staging URL of its own; without this
+      # the browser can't complete the cross-origin cookie flow (server.ts
+      # CORS config).
+      - key: CORS_ORIGIN
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: SESSION_COOKIE_NAME
+        value: trellis_session
+      # 32 raw bytes, base64 — generate with:
+      #   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+      # Losing this locks out every user with 2FA enabled; store it
+      # somewhere recoverable (Render's own env var storage is fine for
+      # staging, not for prod).
+      - key: TOTP_ENCRYPTION_KEY
+        sync: false
+      # Optional — omit and the mailer falls back to a console transport
+      # (reset links/2FA-disabled notices land in the service logs instead
+      # of an inbox, which is fine for staging).
+      - key: POSTMARK_SERVER_TOKEN
+        sync: false
+      - key: MAIL_FROM
+        value: "Trellis <no-reply@trellis.local>"
+      # Optional — Google sign-in is simply absent from the web app
+      # (GET /auth/config) until all three are set.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
