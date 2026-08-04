@@ -9,6 +9,13 @@ import {
 import { withTenantContext } from "../../db/tenant-db.js";
 import { getAccessibleBoard } from "../boards/index.js";
 import { recordActivity } from "../../lib/activity.js";
+import {
+  subscribeToItem,
+  getItemSubscribers,
+} from "../../lib/subscriptions.js";
+import { notifyUsers, markEmailed } from "../../lib/notify.js";
+import { sendMail } from "../../lib/mailer.js";
+import { notificationMail } from "../notifications/index.js";
 import { createCommentSchema, updateCommentSchema } from "./schemas.js";
 import { conflict, notFound, validationError } from "../../lib/errors.js";
 import type { AppDb } from "../../db/types.js";
@@ -154,7 +161,32 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
           payload: { commentId: created.id, preview: preview(bodyText) },
         });
 
-        return { kind: "ok" as const, comment: created };
+        // Posting subscribes you to the thread — so your own later
+        // replies (and everyone else's) reach you too (02 §3.7).
+        await subscribeToItem(tx, { orgId, itemId, userId, reason: "manual" });
+
+        const subscribers = await getItemSubscribers(tx, itemId);
+        const targets = await notifyUsers(tx, {
+          orgId,
+          actorId: userId,
+          recipientUserIds: subscribers,
+          eventType: "reply",
+          itemId,
+          boardId: item.boardId,
+          commentId: created.id,
+          payload: { itemName: item.name, preview: preview(bodyText) },
+        });
+        const mailJobs = targets.map((t) => ({
+          notificationId: t.notificationId,
+          mail: notificationMail(t.email, {
+            eventType: "reply",
+            actorName: request.authSession!.user.name,
+            itemName: item.name,
+            preview: preview(bodyText),
+          }),
+        }));
+
+        return { kind: "ok" as const, comment: created, mailJobs };
       });
 
       switch (outcome.kind) {
@@ -175,6 +207,14 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
             "Replies can only be one level deep.",
           );
         case "ok":
+          for (const job of outcome.mailJobs) {
+            try {
+              await sendMail(job.mail);
+              await markEmailed(app.db, orgId, [job.notificationId]);
+            } catch (err) {
+              request.log.error({ err }, "notification email failed");
+            }
+          }
           return reply.code(201).send({
             comment: {
               ...outcome.comment,
@@ -269,22 +309,56 @@ export const commentsRoutes: FastifyPluginAsync = async (app) => {
       const userId = request.authSession!.user.id;
 
       const outcome = await withTenantContext(app.db, orgId, async (tx) => {
-        const comment = await getAccessibleCommentForReaction(
+        const found = await getAccessibleCommentForReaction(
           tx,
           orgId,
           userId,
           commentId,
         );
-        if (!comment) return "not-found" as const;
+        if (!found) return { kind: "not-found" as const };
+        const { comment, boardId, itemName } = found;
 
-        await tx
+        const inserted = await tx
           .insert(commentReactions)
           .values({ orgId, commentId, userId, emoji })
-          .onConflictDoNothing();
-        return "ok" as const;
+          .onConflictDoNothing()
+          .returning({ commentId: commentReactions.commentId });
+
+        // Already reacted with this emoji — idempotent, and no repeat
+        // notification for something the author already knows about.
+        if (inserted.length === 0) return { kind: "ok" as const, mailJobs: [] };
+
+        const targets = await notifyUsers(tx, {
+          orgId,
+          actorId: userId,
+          recipientUserIds: [comment.authorId],
+          eventType: "reaction",
+          itemId: comment.itemId,
+          boardId,
+          commentId,
+          payload: { itemName, preview: emoji },
+        });
+        const mailJobs = targets.map((t) => ({
+          notificationId: t.notificationId,
+          mail: notificationMail(t.email, {
+            eventType: "reaction",
+            actorName: request.authSession!.user.name,
+            itemName,
+          }),
+        }));
+
+        return { kind: "ok" as const, mailJobs };
       });
 
-      if (outcome === "not-found") return notFound(reply);
+      if (outcome.kind === "not-found") return notFound(reply);
+      for (const job of outcome.mailJobs) {
+        try {
+          await sendMail(job.mail);
+          await markEmailed(app.db, orgId, [job.notificationId]);
+        } catch (err) {
+          request.log.error({ err }, "notification email failed");
+        }
+      }
       return reply.code(204).send();
     },
   );
@@ -388,7 +462,7 @@ async function getAccessibleCommentForReaction(
   );
   if (!item) return null;
 
-  return comment;
+  return { comment, boardId: item.boardId, itemName: item.name };
 }
 
 /** Only the author can edit/delete their own comment. */

@@ -166,6 +166,19 @@ export interface ActivityEvent {
   createdAt: string;
 }
 
+export interface Notification {
+  id: string;
+  eventType: string;
+  actorId: string | null;
+  actorName: string | null;
+  itemId: string | null;
+  boardId: string | null;
+  commentId: string | null;
+  payload: Record<string, unknown>;
+  readAt: string | null;
+  createdAt: string;
+}
+
 // ---- Auth ----
 
 export function signup(input: {
@@ -455,4 +468,35 @@ export function removeReaction(commentId: string, emoji: string) {
 
 export function listItemActivity(itemId: string) {
   return request<{ events: ActivityEvent[] }>(`/v1/items/${itemId}/activity`);
+}
+
+// ---- Notifications ----
+
+export function listNotifications(unreadOnly = false) {
+  return request<{ notifications: Notification[] }>(
+    `/v1/notifications${unreadOnly ? "?unread=true" : ""}`,
+  );
+}
+
+export function unreadNotificationCount() {
+  return request<{ count: number }>("/v1/notifications/unread-count");
+}
+
+export function markNotificationsRead(ids: string[]) {
+  return request<void>("/v1/notifications/mark-read", {
+    method: "POST",
+    body: { ids },
+  });
+}
+
+export function markAllNotificationsRead() {
+  return request<void>("/v1/notifications/mark-all-read", { method: "POST" });
+}
+
+export function muteBoard(boardId: string) {
+  return request<void>(`/v1/boards/${boardId}/mute`, { method: "PUT" });
+}
+
+export function unmuteBoard(boardId: string) {
+  return request<void>(`/v1/boards/${boardId}/mute`, { method: "DELETE" });
 }

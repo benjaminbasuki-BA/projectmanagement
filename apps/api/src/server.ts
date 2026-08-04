@@ -16,6 +16,7 @@ import { organizationsRoutes } from "./modules/organizations/index.js";
 import { workspacesRoutes } from "./modules/workspaces/index.js";
 import { boardsModuleRoutes } from "./modules/boards/index.js";
 import { itemsModuleRoutes } from "./modules/items/index.js";
+import { notificationsRoutes } from "./modules/notifications/index.js";
 import tenantPlugin from "./middleware/tenant.js";
 import type { AppDb } from "./db/types.js";
 
@@ -99,6 +100,7 @@ export async function buildServer(db: AppDb) {
   await app.register(workspacesRoutes, { prefix: "/v1" });
   await app.register(boardsModuleRoutes, { prefix: "/v1" });
   await app.register(itemsModuleRoutes, { prefix: "/v1" });
+  await app.register(notificationsRoutes, { prefix: "/v1" });
 
   return app;
 }

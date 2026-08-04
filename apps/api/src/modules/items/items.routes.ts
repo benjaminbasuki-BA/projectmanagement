@@ -18,6 +18,13 @@ import {
 import { resolveColumnValue } from "./column-values.js";
 import { conflict, notFound, validationError } from "../../lib/errors.js";
 import { recordActivity } from "../../lib/activity.js";
+import {
+  subscribeToItem,
+  getItemSubscribers,
+} from "../../lib/subscriptions.js";
+import { notifyUsers, markEmailed } from "../../lib/notify.js";
+import { sendMail, type Mail } from "../../lib/mailer.js";
+import { notificationMail } from "../notifications/index.js";
 import type { AppDb } from "../../db/types.js";
 
 const MAX_ITEMS_PER_BOARD = 20_000; // 01 §2.1 "20,000 items per board (hard)"
@@ -152,6 +159,16 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
           actorId: userId,
           eventType: "item.created",
           payload: { name },
+        });
+
+        // Whoever creates an item is implicitly subscribed to it — the
+        // first person who'd want to know when a comment/status lands
+        // (docs/02 §3.7).
+        await subscribeToItem(tx, {
+          orgId,
+          itemId: created.id,
+          userId,
+          reason: "creator",
         });
 
         return { kind: "ok" as const, item: created };
@@ -408,6 +425,12 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
             ),
           );
         const beforeById = new Map(before.map((b) => [b.columnId, b.value]));
+        const actorName = request.authSession!.user.name;
+        // Collected instead of sent inline — this is the hot path
+        // (04 §2.5, §3.3), so a slow mail provider must not add latency
+        // to every cell edit. Sent fire-and-forget after the switch
+        // below, once the transaction has actually committed.
+        const mailJobs: { notificationId: string; mail: Mail }[] = [];
 
         for (const rv of resolved) {
           await tx
@@ -445,6 +468,74 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
               eventType: "column_value.changed",
               payload: { columnId: rv.columnId, from, to: rv.value },
             });
+
+            const column = byId.get(rv.columnId)!;
+
+            // Assigning someone via a person column both subscribes them
+            // to the item and tells them they've been assigned — the one
+            // notification trigger achievable without @mentions (a
+            // separate, later piece of work).
+            if (column.type === "person") {
+              const oldIds = new Set(
+                (from as { user_ids?: string[] } | null)?.user_ids ?? [],
+              );
+              const newIds =
+                (rv.value as { user_ids?: string[] }).user_ids ?? [];
+              const added = newIds.filter((id) => !oldIds.has(id));
+
+              for (const assigneeId of added) {
+                await subscribeToItem(tx, {
+                  orgId,
+                  itemId,
+                  userId: assigneeId,
+                  reason: "assignee",
+                });
+              }
+              if (added.length > 0) {
+                const targets = await notifyUsers(tx, {
+                  orgId,
+                  actorId: userId,
+                  recipientUserIds: added,
+                  eventType: "assigned",
+                  itemId,
+                  boardId: item.boardId,
+                  payload: { itemName: item.name },
+                });
+                for (const t of targets) {
+                  mailJobs.push({
+                    notificationId: t.notificationId,
+                    mail: notificationMail(t.email, {
+                      eventType: "assigned",
+                      actorName,
+                      itemName: item.name,
+                    }),
+                  });
+                }
+              }
+            }
+
+            if (column.type === "status") {
+              const subscribers = await getItemSubscribers(tx, itemId);
+              const targets = await notifyUsers(tx, {
+                orgId,
+                actorId: userId,
+                recipientUserIds: subscribers,
+                eventType: "status_changed",
+                itemId,
+                boardId: item.boardId,
+                payload: { itemName: item.name, columnId: rv.columnId },
+              });
+              for (const t of targets) {
+                mailJobs.push({
+                  notificationId: t.notificationId,
+                  mail: notificationMail(t.email, {
+                    eventType: "status_changed",
+                    actorName,
+                    itemName: item.name,
+                  }),
+                });
+              }
+            }
           }
         }
 
@@ -453,7 +544,7 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
           .from(columnValues)
           .where(eq(columnValues.itemId, itemId));
 
-        return { kind: "ok" as const, item, columnValues: values };
+        return { kind: "ok" as const, item, columnValues: values, mailJobs };
       });
 
       switch (outcome.kind) {
@@ -468,6 +559,13 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
         case "bad-value":
           return validationErrorDetail(reply, outcome.columnId, outcome.error);
         case "ok":
+          for (const job of outcome.mailJobs) {
+            sendMail(job.mail)
+              .then(() => markEmailed(app.db, orgId, [job.notificationId]))
+              .catch((err) =>
+                request.log.error({ err }, "notification email failed"),
+              );
+          }
           return reply.send({
             item: outcome.item,
             columnValues: outcome.columnValues,

@@ -72,3 +72,19 @@ export function useItemActivity(itemId: string) {
     queryFn: () => api.listItemActivity(itemId),
   });
 }
+
+export function useNotifications() {
+  return useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => api.listNotifications(),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useUnreadNotificationCount() {
+  return useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: api.unreadNotificationCount,
+    refetchInterval: 30_000,
+  });
+}
