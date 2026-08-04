@@ -1,0 +1,20 @@
+node_modules/
+dist/
+build/
+.turbo/
+out/
+.env
+.env.local
+*.local
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.vscode/*
+!.vscode/extensions.json
+coverage/
+
+# Machine-local Claude Code permissions — has held a live API key before
+# (a Stitch MCP header), never commit this.
+.claude/settings.local.json

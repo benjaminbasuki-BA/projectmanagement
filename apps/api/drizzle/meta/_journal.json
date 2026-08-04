@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1783730790405,
+      "tag": "0000_mvp_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783730902596,
+      "tag": "0001_mvp_indexes_and_triggers",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783732505578,
+      "tag": "0002_tenancy_and_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783732592484,
+      "tag": "0003_tenancy_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783732655020,
+      "tag": "0004_rls_policies",
+      "breakpoints": true
+    }
+  ]
+}

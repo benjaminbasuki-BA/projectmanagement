@@ -1,0 +1,129 @@
+/**
+ * Trellis design tokens — authority: /design.md (v3.0, editorial).
+ * Import in each app's root stylesheet, after tailwindcss:
+ *
+ *   @import "tailwindcss";
+ *   @import "@trellis/ui/tokens.css";
+ *
+ * Governing position: the interface has NO brand hue. Chrome is ink on
+ * paper; every chromatic moment on screen belongs to the user's own data
+ * (status, group identity, people). Components never hard-code hexes.
+ */
+@theme {
+  /* Type: one superfamily, three voices (design.md §4).
+     Serif = the document voice (titles). Sans = the interface voice.
+     Mono = values — dates, ids, counts, anything read as a number. */
+  --font-serif:
+    "IBM Plex Serif", Constantia, "Sitka Text", Georgia, serif;
+  --font-sans:
+    "IBM Plex Sans", "Segoe UI Variable Text", "Segoe UI", ui-sans-serif,
+    system-ui, -apple-system, sans-serif;
+  --font-mono:
+    "IBM Plex Mono", Consolas, ui-monospace, "Cascadia Mono", monospace;
+
+  /* Paper and ink (design.md §3.2). Warm-shifted toward STONE, not cream:
+     a true-neutral grey reads as unconsidered, and a yellow cream — with a
+     serif above it — is the most recognisable generated palette going.
+     Stone gets the warmth without the costume. */
+  --color-paper: #fbfaf7;
+  --color-sidebar: #f3efe8;
+  --color-frame: #edeae4;
+  --color-ink: #1a1714;
+  --color-ink-muted: #635a50;
+  --color-ink-faint: #948a7e;
+  --color-rule: #dcd6cc;
+  --color-rule-strong: #1a1714;
+
+  /* The only non-status chrome colour: a tobacco umber for links and
+     hovers. Deep enough to read as ink-with-warmth rather than as a brand
+     accent — it must never become "the brand colour". */
+  --color-deep: #6b4a2f;
+  --color-deep-hover: #8a6340;
+  --color-deep-wash: #f2ebe2;
+
+  /* Editorial red for past-due figures and destructive actions — a print
+     red, kept clearly redder than the umber so the two never blur. */
+  --color-alert: #a3222b;
+
+  /* Status defaults — the data layer. Warmed to sit on stone: the previous
+     slate idle was blue-grey and fought the ground. Bar fills are
+     graphical objects (3:1); label text is always drawn beside the bar in
+     ink, never on it (design.md §3.3, §10). */
+  --color-status-idle: #a39a8d;
+  --color-status-active: #e08a1e;
+  --color-status-blocked: #c4432f;
+  --color-status-done: #4e8a5c;
+
+  --color-success: #4e8a5c;
+  --color-warning: #e08a1e;
+  --color-danger: #a3222b;
+  --color-info: #6b4a2f;
+
+  /* `brand-*` retained as an alias so existing call sites migrate by token
+     rather than by hand. New code uses `deep` / `ink` / `rule` directly. */
+  --color-brand-50: #f2ebe2;
+  --color-brand-100: #e6dbcb;
+  --color-brand-200: #cdbba1;
+  --color-brand-300: #a98d68;
+  --color-brand-400: #8a6340;
+  --color-brand-500: #7a5535;
+  --color-brand-600: #6b4a2f;
+  --color-brand-700: #543a24;
+
+  /* Neutrals on a warm stone ramp so chrome and paper agree. Overriding the
+     scale migrates every existing `neutral-*` call site at once. */
+  --color-neutral-50: #f7f5f1;
+  --color-neutral-100: #f1eee8;
+  --color-neutral-200: #dcd6cc;
+  --color-neutral-300: #c6beb1;
+  --color-neutral-400: #948a7e;
+  --color-neutral-500: #635a50;
+  --color-neutral-600: #51493f;
+  --color-neutral-700: #3e372f;
+  --color-neutral-800: #292420;
+  --color-neutral-900: #1a1714;
+
+  /* Geometry: editorial means rules, not rounded cards. Radius is nearly
+     square everywhere — the one exception is avatars. */
+  --radius-fill: 0.0625rem;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.1875rem;
+  --radius-lg: 0.1875rem;
+  --radius-card: 0.25rem;
+  --radius-sheet: 0.25rem;
+
+  /* Elevation is carried by rules and paper, not by shadow. Only surfaces
+     that genuinely float (popovers, dialogs, drag) get one. */
+  --shadow-xs: none;
+  --shadow-card: none;
+  --shadow-sheet: none;
+  --shadow-md: 0 4px 16px rgb(20 22 26 / 0.1);
+  --shadow-drag: 0 10px 28px rgb(20 22 26 / 0.16);
+
+  /* Density: the grid tightens when you're deep in it (design.md §5.3). */
+  --spacing-row-compact: 1.875rem;
+  --spacing-row-comfortable: 2.375rem;
+
+  /* Motion (design.md §7): fast 120 / base 180 / slow 240, nothing beyond */
+  --animate-overlay-in: overlay-in 180ms ease-out;
+  --animate-panel-in: panel-in 180ms ease-out;
+  --animate-slide-in-right: slide-in-right 240ms ease-out;
+
+  @keyframes overlay-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes panel-in {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+  }
+  @keyframes slide-in-right {
+    from {
+      opacity: 0;
+      transform: translateX(20px);
+    }
+  }
+}

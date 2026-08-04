@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trellis
+      POSTGRES_PASSWORD: trellis
+      POSTGRES_DB: trellis
+    ports:
+      - "5432:5432"
+    volumes:
+      - trellis_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trellis"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+# Redis/Meilisearch/imgproxy/mailpit (docs/03-backend-architecture.md §2)
+# are added here once the features that need them are built — not part
+# of scaffolding.
+
+volumes:
+  trellis_postgres_data:

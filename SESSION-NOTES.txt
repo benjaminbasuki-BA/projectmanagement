@@ -1,0 +1,405 @@
+TRELLIS — IMPLEMENTATION SESSION NOTES
+========================================
+A running log of what was done across this working session, in order.
+The full product blueprint lives in /docs (00-index.md onward); this
+file documents the implementation work done on top of that blueprint,
+not the blueprint itself. The four sections below (Overview,
+Background, Objectives, Scope) summarize that blueprint for context;
+source of truth for all of it is docs/01-vision-and-scope.md.
+
+
+PROJECT OVERVIEW
+===================
+Trellis is an AI-assisted, monday.com-style work management SaaS,
+purpose-built for client-facing teams — agencies, consultancies,
+studios, and professional-services firms whose work is ultimately
+delivered to someone outside the company. One-liner from the blueprint:
+"the AI-assisted work operating system for client-facing teams — plan
+work, run it, and show it to clients without ever exporting a
+spreadsheet."
+
+Like monday.com, the product is built around colorful, customizable
+boards: groups, items, typed columns, multiple views, automations, and
+dashboards. Unlike monday.com's horizontal "Work OS for everyone"
+positioning, Trellis is deliberately narrower — it bets on one
+underserved job (external, client-facing collaboration) rather than
+trying to be everything to every team.
+
+The product is currently free — no billing, subscriptions, or paywalls
+exist anywhere in the codebase, and none are planned until well past
+the phases covered here (see Scope, below).
+
+
+BACKGROUND
+============
+The project started as a full four-stage product blueprint (11
+documents in /docs, 00-index.md onward), written before any code
+existed: vision & scope, data model, backend architecture, API design,
+automation engine, frontend architecture, UX flows, roadmap,
+differentiation/AI strategy, security/compliance, and — added during
+this implementation session — a UI/UX design system spec
+(docs/11-ui-design-system.md). Every decision below traces back to that
+blueprint rather than being invented ad hoc.
+
+One notable revision made to the original blueprint, on the same day it
+was completed: AI was reclassified from a deferred/optional layer to a
+core product pillar. This reversed an original non-goal and rippled
+across every document — a fourth vision pillar ("AI-native, not
+AI-bolted-on"), new AI feature tables in the phase breakdown, dedicated
+AI database tables, an AI backend module, and AI-specific frontend
+patterns (suggestion surfaces, never a bolted-on chatbot).
+
+Four product pillars anchor every roadmap and design decision made
+since:
+  1. Client-grade by default — sharing with an outside client is a
+     first-class flow, not a permissions workaround.
+  2. Fast and keyboard-first — sub-100ms perceived interaction budget,
+     full ⌘K command palette, no spinners on core actions.
+  3. Transparent automations — every automation run is logged and
+     debuggable; automations are never a "magic," opaque black box.
+  4. AI-native, not AI-bolted-on — AI lives inside existing workflows
+     (search, drafting, summarizing) and every AI action is a
+     suggestion until a human confirms it — never an autonomous
+     mutation, and never trained on client-portal/share-link data.
+
+Actual implementation (the code in this repo) began after the blueprint
+was complete: a backend "walking skeleton" (Fastify API + Drizzle ORM
+against Postgres, with a Docker-free PGlite dev mode) and a React SPA
+frontend were built to prove the core data flow end-to-end — auth, org,
+workspace, board, groups, columns, items, column values — before any
+UI polish was invested. This session's work (logged below) picks up
+from that walking skeleton: first making it runnable, then building it
+into a genuinely presentable product UI.
+
+
+PROJECT OBJECTIVES
+=====================
+From the blueprint's stated vision, the objectives guiding the product
+are:
+
+  - Prove a board-based work management tool can feel faster and more
+    pleasant to use than both a spreadsheet and monday.com itself.
+  - Make sharing work with an external client a two-click, polished,
+    first-class flow — not a bolted-on permissions hack — since serving
+    outside stakeholders is the product's core wedge.
+  - Weave AI into workflows users already rely on (search, drafting,
+    catching up on a thread) rather than shipping a separate chatbot
+    nobody opens; every AI action must be suggest -> review -> confirm,
+    never autonomous.
+  - Keep automations transparent and debuggable: every run logged with
+    inputs, outputs, and failures, with dry-run preview before
+    enabling.
+  - Reach product-market signal in stages, each with a concrete exit
+    gate (see Scope, below) before expanding further — not building V1
+    features while still proving the MVP loop.
+  - Stay free through the phases covered by the current blueprint,
+    prioritizing adoption and the external-collaborator network effect
+    over early monetization.
+
+The immediate objective of this working session specifically was to
+take the walking skeleton from "runs, barely" to a genuinely presentable
+product: get it running locally, remove friction from iterating on it
+(the dev auth bypass), design a real visual/interaction language for
+it, and implement that design on the core surfaces (app shell, home,
+board table, kanban, item detail) — all without exceeding the MVP
+feature boundary the blueprint sets.
+
+
+PROJECT SCOPE
+================
+The blueprint defines four phases, each with a stated goal and exit
+criteria. This repository is currently being built to MVP scope only —
+per CLAUDE.md, V1/V2/Enterprise features are explicitly out of bounds
+even opportunistically, and anything not tagged MVP in the docs should
+be treated as not yet in scope.
+
+  Phase        Timeframe      Goal                                  Exit criteria
+  -----        ---------      ----                                  -------------
+  MVP          Months 0-4     Prove core board UX with design       20 design-partner teams;
+                               partners                              >= 40% week-4 retention;
+                                                                      item-edit p95 < 300ms
+  V1           Months 5-9     Public launch, client-access wedge    500 weekly-active teams;
+                                                                      >= 25% of active boards use
+                                                                      a client share link/guest
+  V2           Months 10-18   Scale, mobile, depth (workload,       5,000 weekly-active teams;
+                               formulas, connect boards)             >= 40% month-3 retention
+  Enterprise   Months 16-24   Deployable at 100+ seat orgs           SOC 2 Type II; 5 deployments
+               (overlaps V2)  (still free — "readiness," not a       at 100+ seats; SSO/SCIM/
+                               paid tier)                            audit GA
+
+MVP scope (what this codebase is currently being built to) includes:
+  - Auth: email+password, Google OAuth, optional TOTP 2FA; single
+    workspace per account; admin/member roles.
+  - Boards: main + private boards, groups, items, archive/delete with
+    30-day recovery, batch edit up to 500 items.
+  - 8 column types: status, text, long_text, number, person, date,
+    dropdown, checkbox — with custom status labels and colors.
+  - Views: Table (virtualized to 20k items) and Kanban only. Filters,
+    3-key sort, saved views.
+  - Collaboration: rich-text updates/comments with @mentions, activity
+    logs, file attachments on updates.
+  - Notifications: in-app + email.
+  - Search: ⌘K palette with board jump, item search, and AI-assisted
+    natural-language search.
+  - AI: strictly limited to natural-language search and one-click
+    thread summarization — every other AI feature (task generation,
+    automation suggestions, project planning, dashboard insights,
+    meeting-to-task, risk detection, the AI assistant) is V1 or later.
+  - 6 starter board templates, CSV import/export, responsive mobile
+    web, basic admin.
+
+Explicitly NOT in MVP scope (deferred to V1 or later — do not build
+opportunistically): subitems, folders, multiple workspaces,
+Timeline/Gantt/Calendar views, forms, dashboards, the automations
+engine, integrations beyond CSV, guest accounts/client share links,
+public API/webhooks, time tracking, dependencies, recurring items,
+teams/@team, global cross-workspace search, and PWA push.
+
+Permanent, all-phase non-goals (never planned, any phase): a docs/wiki
+editor, a whiteboard tool, a chat product, a full CRM or developer-grade
+issue tracker, and self-hosted deployment — Trellis integrates with the
+category leaders in those spaces instead of rebuilding them.
+
+Constraint that applies across every phase covered by the current
+blueprint: the product is free. No billing, subscription, plan-tier, or
+payment code exists or is being built; `organizations.plan` is always
+'free', and quota/rate limits that do exist (storage, automation runs,
+API rate, etc.) are fair-use/abuse-prevention limits, not a pricing
+mechanism.
+
+
+IMPLEMENTATION LOG
+=====================
+The sections below are a running, chronological log of the actual
+implementation work done in this repository, on top of the blueprint
+and scope described above.
+
+
+1. GETTING THE APP RUNNING
+---------------------------
+Starting point: a "walking skeleton" already existed (Fastify API in
+apps/api, React SPA in apps/web) but had never been launched.
+
+- Checked the environment: no Docker available, but the API supports a
+  Docker-free dev mode against an in-memory PGlite Postgres (real
+  migrations + RLS, data lost on restart).
+- Started both processes:
+    apps/api:  pnpm dev:pglite   -> http://localhost:3001
+    apps/web:  pnpm dev          -> http://localhost:5173
+- Confirmed the walking skeleton worked end-to-end: signup/login,
+  create org -> workspace -> board -> groups -> columns -> items ->
+  column values, all wired to the real API.
+
+
+2. DEV AUTH BYPASS
+--------------------
+Request: skip the login/signup screen during development so other
+features could be tested without repeatedly authenticating, without
+deleting the auth feature (auth is MVP scope per CLAUDE.md).
+
+Decision: keep AuthPage/signup/login routes and code completely
+intact; add a dev-only bypass instead of removing anything.
+
+Change: apps/web/src/app/router.tsx
+- RequireAuth now auto-logs-in (falling back to auto-signup on first
+  run) a fixed local account: dev@trellis.local / dev-local-password.
+- Gated behind `import.meta.env.DEV`, so it is compiled out of any
+  production build and never ships.
+- /login and /signup remain fully functional routes for whenever real
+  auth work resumes.
+
+
+3. FIRST UI POLISH PASS
+--------------------------
+Observation: the existing UI was intentionally bare — code comments in
+the walking skeleton explicitly called it a "walking skeleton" built to
+prove the data flow, not real UI. No design system, no app shell.
+
+Built (all local to apps/web, no new dependencies yet):
+- src/components/ui.tsx       — Button, Input, Avatar, Dropdown, Spinner...
+- src/components/icons.tsx    — hand-drawn inline icon set
+- src/app/AppShell.tsx        — sidebar (workspaces, boards) + main pane
+- src/features/home/HomePage.tsx        — greeting, board card grid
+- src/features/boards/BoardPage.tsx     — monday-style grouped table,
+  colored status chips, per-type cell editors
+- src/features/home/CreateOrgScreen.tsx
+- src/features/boards/useCreateBoard.ts
+- src/lib/errors.ts
+
+Seeded demo data (script kept at the path noted in section 6) so the
+board looked populated for a live demo: org "BYU-Hawaii", workspace
+"OIT", boards Laptop / Projector / Desktop with sample items.
+
+
+4. UI/UX DESIGN PLAN — docs/11-ui-design-system.md
+------------------------------------------------------
+Request: a full UI/UX redesign plan in the spirit of monday.com /
+Linear / Notion / Asana quality (an 18-section brief was provided).
+
+Before writing anything, re-grounded the ask in the existing blueprint
+(docs 01, 06, 08, 09) rather than the brief's generic-SaaS assumptions,
+and corrected three mismatches explicitly:
+- Stack is Vite + React Router + Fastify/Postgres, NOT Next.js/Supabase
+  (doc 06 §1 deliberately rejected Next.js already).
+- Automation builder is a linear sentence-builder, NOT a drag/flowchart
+  canvas (doc 06 §9's transparency principle).
+- No floating AI chat bubble — AI is woven into surfaces (NL search,
+  inline summaries, draft rows), governed by suggest -> review ->
+  confirm (doc 09).
+
+Wrote docs/11-ui-design-system.md, sections A-L:
+  A. UI/UX design vision (personality, feel)
+  B. Main layout blueprint (shell, sidebar, TopBar, Home)
+  C. Board experience redesign (header, toolbar, table, kanban, item
+     panel) — the flagship section
+  D. Automation builder design (V1)
+  E. AI assistant design (MVP/V1/V2 phased)
+  F. Dashboard design (V1)
+  G. Design system (color palette incl. the 20-label hex palette,
+     type scale, spacing/radius/shadow scales, component specs)
+  H. Component architecture (inventory mapped to packages/ui + feature
+     folders, state rules)
+  I. Interaction & animation plan (timing system, drag physics,
+     command palette, keyboard shortcuts, real-time presence,
+     confetti-on-done)
+  J. Implementation roadmap (sequenced steps)
+  K. MVP UI scope (the hard boundary — no dead buttons for V1 features)
+  L. Advanced UI features for later (parking lot)
+
+Registered in docs/00-index.md. Everything in the doc keeps its MVP /
+V1 / V2 phase tag from doc 01 — writing the spec does not change scope.
+
+
+5. ROADMAP STEP 1 — packages/ui graduates from stub to real kit
+---------------------------------------------------------------------
+Request: implement the plan's first roadmap step as production-ready
+code (the brief asked for Next.js/shadcn; kept shadcn's actual pattern
+— Radix + Tailwind vendored as source — but on the project's real Vite
+stack, since rewriting the working app in Next.js would have thrown it
+away for no benefit).
+
+Installed: @radix-ui/react-dialog, @radix-ui/react-dropdown-menu,
+@radix-ui/react-popover, lucide-react (replacing the hand-drawn icons).
+
+packages/ui (was an empty stub) now contains:
+  src/tokens.css   — Tailwind v4 @theme tokens: brand scale, AI accent,
+                     semantic colors, radius scale, shadow scale,
+                     motion keyframes (per doc 11 §G)
+  src/cn.ts, src/colors.ts (20-label palette, colorForString,
+                     labelTextColor contrast util)
+  src/button.tsx, input.tsx, badge.tsx, avatar.tsx, status-chip.tsx,
+  skeleton.tsx, empty-state.tsx, spinner.tsx
+  src/dialog.tsx, dropdown-menu.tsx, popover.tsx  — Radix-based
+  src/index.ts     — barrel export as @trellis/ui
+
+apps/web changes:
+  src/index.css              — imports @trellis/ui/tokens.css
+  src/app/AppShell.tsx        — rebuilt: collapsible sidebar (persists
+                                 in localStorage), workspace switcher
+                                 popover + new-workspace dialog
+  src/app/TopBar.tsx (new)    — Cmd/Ctrl+K search affordance,
+                                 quick-create split button, notification
+                                 bell (empty-inbox popover), avatar menu
+  src/app/CommandMenu.tsx (new) — Cmd/Ctrl+K command palette: jump to
+                                 board, switch workspace, toggle sidebar
+  src/features/home/HomePage.tsx      — added a "recents" row
+  src/features/boards/BoardPage.tsx   — breadcrumb, Radix status
+                                         popover replacing native select
+  src/lib/recent-boards.ts (new) — localStorage MRU for the recents row
+  Deleted: src/components/ui.tsx, src/components/icons.tsx (superseded
+  by @trellis/ui)
+
+Verified: typecheck clean on both packages, all modules transform
+through Vite, tokens present in compiled CSS, API/seed data intact.
+
+
+6. ROADMAP STEPS 3-5 — Table v2, Kanban view, item detail panel
+-----------------------------------------------------------------------
+Before building, read the actual API route files to confirm every
+needed endpoint existed (rename, resize, reorder, archive, group/column
+delete) rather than assuming — found column width PATCH, item PATCH
+with position, group/column PATCH+DELETE all already implemented.
+
+Installed: @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities.
+
+New shared code:
+  src/lib/position.ts — fractional/LexoRank-style position-between
+    util (matches docs/02 §0's "one row write, never bulk reindex"
+    convention). Property-tested with 200-deep stress inserts on both
+    the head and a shrinking middle gap before use.
+  src/features/items/cells.tsx — the per-column-type Cell renderer/
+    editor extracted out of BoardPage so the table, Kanban cards, and
+    item panel all reuse the exact same components (doc 11 §H.1 rule).
+  apps/web/src/lib/api-client.ts — added updateBoard, updateGroup,
+    deleteGroup, updateColumn, deleteColumn, updateItem, archiveItem,
+    and columnValues support on createItem.
+
+New views:
+  src/features/views/table/TableView.tsx — table v2: row checkboxes +
+    floating bulk-action bar (set status / archive / clear selection),
+    column header menu (rename, delete) with a drag-to-resize handle
+    that persists width, row drag-to-reorder via dnd-kit (one
+    fractional position write, optimistic with rollback), inline item
+    rename, group header menu (20-color palette grid, rename, delete).
+  src/features/views/kanban/KanbanView.tsx — lanes generated from the
+    board's status column labels; drag cards between lanes to change
+    status (optimistic); "+ Add" per lane pre-fills that status; empty
+    state prompting to add a Status column if none exists.
+  src/features/items/ItemPanel.tsx — right-hand slide-over item detail
+    panel, URL-synced via ?item=<id> (deep-linkable, Esc to close),
+    editable title, archive action, facts grid reusing the same Cell
+    components as the table. Updates/Activity tabs left as a stated TODO
+    pending the comments API.
+
+BoardPage.tsx was rewritten as a thinner orchestrator: header with
+inline board rename, Table/Kanban view tabs (?view=kanban in the URL),
+toolbar, and wiring all mutations through one optimistic setCell
+mutation (onMutate cache patch -> onError rollback -> onSettled
+refetch), matching doc 06 §6's pattern.
+
+Backend fix found and fixed while wiring this up:
+  Problem: logging in never bound a session to the user's organization
+  — only creating or explicitly selecting an org did. Any brand-new
+  browser session (including this test) landed on the "create
+  organization" screen despite already having an org and seeded boards.
+  Fix: apps/api/src/modules/auth/routes.ts — POST /auth/login now looks
+  up the user's most recently active org from their session history and
+  re-verifies membership through the tenant-scoped path (same check as
+  the existing org-select endpoint) before adopting it into the new
+  session.
+  Added a regression test in auth.test.ts: "login resumes the user's
+  most recent active organization." Full suite: 40/40 passing.
+
+Verified end-to-end: typecheck clean, full API test suite passing,
+manual curl round-trips for org auto-resume, item rename+reorder,
+column width persistence, and archive, plus Vite module transform
+checks on every new file.
+
+Deliberately not built (explicitly noted, not silently skipped):
+  - TanStack Table/Virtual (pairs with real virtualization work,
+    doc 08 sprints 5-6 — not worth it at demo scale yet)
+  - Person picker / member list (no members-list API endpoint yet)
+  - Comments / Updates tab in the item panel (no comments API yet)
+  - Cross-group row drag (item PATCH doesn't accept groupId yet)
+
+
+CURRENT STATE / HOW TO RUN
+-----------------------------
+  API:   cd apps/api && pnpm dev:pglite   -> http://localhost:3001
+         (in-memory Postgres — data resets on restart)
+  Web:   cd apps/web && pnpm dev          -> http://localhost:5173
+
+  Dev login is automatic (dev@trellis.local) via the bypass in
+  router.tsx — no manual signup needed while import.meta.env.DEV.
+
+  If the API restarts, re-run the seed script to repopulate demo data
+  (org "BYU-Hawaii" / workspace "OIT" / boards Laptop, Projector,
+  Desktop). The script was written to a scratchpad temp path during
+  this session — recreate it from api-client calls (signup/login,
+  createOrganization, createWorkspace, createBoard, createGroup,
+  createColumn "status", createItem with columnValues) if that path is
+  gone, or ask to have it committed into the repo (e.g.
+  apps/api/src/dev/seed.mjs) so it survives future sessions.
+
+  Full architectural detail: /docs (00-index.md is the entry point).
+  UI/UX design spec: docs/11-ui-design-system.md.

@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/* Type: IBM Plex superfamily, three voices (design.md §4) */
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource/ibm-plex-serif/400.css";
+@import "@fontsource/ibm-plex-serif/500.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+@import "@trellis/ui/tokens.css";
+
+/* Tailwind must also scan the vendored design-system sources. */
+@source "../../../packages/ui/src";
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-frame text-ink;
+  }
+
+  /* Values line up in columns wherever they're read as numbers. */
+  .font-mono,
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #c2c3be;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #8b8f94;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* design.md §7 / §9 — reduced motion disables everything but fades */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
