@@ -1,28 +1,44 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMatch, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
+  FileText,
   Home,
   LayoutGrid,
+  MessageSquare,
   PanelLeft,
   Search,
   SquareKanban,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, cn } from "@trellis/ui";
 import type { Workspace } from "../lib/api-client";
+import * as api from "../lib/api-client";
 import { useBoards } from "../lib/queries";
 
 interface Command {
   id: string;
   section: string;
   label: string;
+  detail?: string;
   icon: ReactNode;
   run: () => void;
 }
 
+/** Waits for typing to pause before hitting the search endpoint. */
+function useDebounced<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(id);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 /**
  * ⌘K command palette (doc 11 §I.4): jump to boards, switch workspaces,
- * run shell actions. Board-level FTS and NL search (doc 09 §3.9) layer
- * into this same surface in later sprints.
+ * run shell actions, and — while a board is open — full-text search over
+ * that board's items and updates (doc 03 §8, board-scoped Postgres FTS).
+ * NL search's ✨ parsed-filter row (09 §3.9) is a further layer on top.
  */
 export function CommandMenu({
   open,
@@ -42,9 +58,12 @@ export function CommandMenu({
   const navigate = useNavigate();
   const boardsQuery = useBoards(workspace?.id);
   const boards = boardsQuery.data?.boards ?? [];
+  const boardMatch = useMatch("/boards/:boardId");
+  const currentBoardId = boardMatch?.params.boardId;
 
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const debouncedQuery = useDebounced(query, 200);
 
   // Resetting during render (React's documented pattern for state that
   // depends on a prop) rather than in an effect — an effect here would
@@ -58,8 +77,33 @@ export function CommandMenu({
     }
   }
 
+  // Only fires while a board is open (doc 03 §8: board-scoped, not global
+  // — that's V1). Debounced separately from `query` so typing doesn't
+  // fire a request per keystroke.
+  const searchQuery = useQuery({
+    queryKey: ["board-search", currentBoardId, debouncedQuery],
+    queryFn: () => api.searchBoard(currentBoardId!, debouncedQuery),
+    enabled: !!currentBoardId && debouncedQuery.trim().length > 0,
+  });
+
   const commands = useMemo<Command[]>(
     () => [
+      ...(searchQuery.data?.items ?? []).map((item) => ({
+        id: `item-${item.id}`,
+        section: "Items",
+        label: item.name,
+        detail: `TRL-${item.displaySeq}`,
+        icon: <FileText size={15} className="text-neutral-400" />,
+        run: () => navigate(`/boards/${currentBoardId}?item=${item.id}`),
+      })),
+      ...(searchQuery.data?.comments ?? []).map((c) => ({
+        id: `comment-${c.id}`,
+        section: "Updates",
+        label: c.bodyText,
+        detail: c.itemName,
+        icon: <MessageSquare size={15} className="text-neutral-400" />,
+        run: () => navigate(`/boards/${currentBoardId}?item=${c.itemId}`),
+      })),
       ...boards.map((b) => ({
         id: `board-${b.id}`,
         section: "Boards",
@@ -95,6 +139,8 @@ export function CommandMenu({
       },
     ],
     [
+      searchQuery.data,
+      currentBoardId,
       boards,
       workspaces,
       workspace?.id,
@@ -106,9 +152,17 @@ export function CommandMenu({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q
-      ? commands.filter((c) => c.label.toLowerCase().includes(q))
-      : commands;
+    if (!q) return commands;
+    return commands.filter(
+      // Items/Updates already came back FTS-matched from the server
+      // (token/phrase matching, not a literal substring) — re-applying a
+      // naive substring filter on top would hide real matches whose
+      // query terms aren't contiguous in the text.
+      (c) =>
+        c.section === "Items" ||
+        c.section === "Updates" ||
+        c.label.toLowerCase().includes(q),
+    );
   }, [commands, query]);
 
   const activeIndex = Math.min(active, Math.max(0, filtered.length - 1));
@@ -128,7 +182,11 @@ export function CommandMenu({
           <input
             autoFocus
             className="h-12 flex-1 bg-transparent text-sm text-neutral-800 outline-none placeholder:text-neutral-400"
-            placeholder="Search boards, workspaces, actions…"
+            placeholder={
+              currentBoardId
+                ? "Search this board's items and updates…"
+                : "Search boards, workspaces, actions…"
+            }
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -173,6 +231,11 @@ export function CommandMenu({
               >
                 {cmd.icon}
                 <span className="truncate">{cmd.label}</span>
+                {cmd.detail && (
+                  <span className="ml-auto shrink-0 truncate pl-2 text-xs text-neutral-400">
+                    {cmd.detail}
+                  </span>
+                )}
               </button>
             </div>
           ))}

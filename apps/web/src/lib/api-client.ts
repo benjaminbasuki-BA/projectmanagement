@@ -474,6 +474,24 @@ export function removeReaction(commentId: string, emoji: string) {
   );
 }
 
+// ---- Board search (⌘K) ----
+
+export interface BoardSearchResult {
+  items: { id: string; name: string; displaySeq: number }[];
+  comments: {
+    id: string;
+    itemId: string;
+    itemName: string;
+    bodyText: string;
+  }[];
+}
+
+export function searchBoard(boardId: string, q: string) {
+  return request<BoardSearchResult>(
+    `/v1/boards/${boardId}/search?q=${encodeURIComponent(q)}`,
+  );
+}
+
 // ---- Activity ----
 
 export function listItemActivity(itemId: string) {

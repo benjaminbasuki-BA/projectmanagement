@@ -4,6 +4,7 @@ import { groupsRoutes } from "./groups.routes.js";
 import { columnsRoutes } from "./columns.routes.js";
 import { viewsRoutes } from "./views.routes.js";
 import { activityRoutes } from "./activity.routes.js";
+import { searchRoutes } from "./search.routes.js";
 
 /**
  * Board-domain routes (docs/02-data-model.md §2–§4, §3.2), matching
@@ -16,6 +17,7 @@ export const boardsModuleRoutes: FastifyPluginAsync = async (app) => {
   await app.register(columnsRoutes);
   await app.register(viewsRoutes);
   await app.register(activityRoutes);
+  await app.register(searchRoutes);
 };
 
 export { getAccessibleBoard, getAccessibleWorkspace } from "./access.js";

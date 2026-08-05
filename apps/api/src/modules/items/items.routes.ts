@@ -16,6 +16,7 @@ import {
   updateColumnValuesSchema,
 } from "./schemas.js";
 import { resolveColumnValue } from "./column-values.js";
+import { parseFilterParam, buildFilterCondition } from "./filter.js";
 import { conflict, notFound, validationError } from "../../lib/errors.js";
 import { recordActivity } from "../../lib/activity.js";
 import {
@@ -219,6 +220,7 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
         groupId?: string;
         limit?: string;
         include?: string;
+        filter?: string;
       };
       const limit = clampLimit(query.limit);
       // docs/04 §2.5: heavy fields are opt-in on list endpoints via
@@ -228,9 +230,37 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
         .split(",")
         .includes("column_values");
 
-      const result = await withTenantContext(app.db, orgId, async (tx) => {
+      const outcome = await withTenantContext(app.db, orgId, async (tx) => {
         const board = await getAccessibleBoard(tx, orgId, userId, boardId);
-        if (!board) return null;
+        if (!board) return { kind: "not-found" as const };
+
+        let filterCondition;
+        if (query.filter) {
+          const parsed = parseFilterParam(query.filter);
+          if (!parsed.success) {
+            return { kind: "bad-filter" as const, error: parsed.error };
+          }
+          const boardColumns = await tx
+            .select({ id: columnsTable.id, type: columnsTable.type })
+            .from(columnsTable)
+            .where(
+              and(
+                eq(columnsTable.boardId, boardId),
+                isNull(columnsTable.deletedAt),
+              ),
+            );
+          const columnsById = new Map(boardColumns.map((c) => [c.id, c]));
+          const built = buildFilterCondition(
+            tx,
+            parsed.filter,
+            columnsById,
+            userId,
+          );
+          if (!built.success) {
+            return { kind: "bad-filter" as const, error: built.error };
+          }
+          filterCondition = built.condition;
+        }
 
         const rows = await tx
           .select()
@@ -240,13 +270,14 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
               eq(items.boardId, boardId),
               isNull(items.deletedAt),
               query.groupId ? eq(items.groupId, query.groupId) : undefined,
+              filterCondition,
             ),
           )
           .orderBy(items.position)
           .limit(limit);
 
         if (!includeColumnValues || rows.length === 0) {
-          return { rows, values: [] };
+          return { kind: "ok" as const, rows, values: [] };
         }
         const values = await tx
           .select()
@@ -257,19 +288,25 @@ export const itemsRoutes: FastifyPluginAsync = async (app) => {
               rows.map((r) => r.id),
             ),
           );
-        return { rows, values };
+        return { kind: "ok" as const, rows, values };
       });
 
-      if (!result) return notFound(reply);
-      // Simplified pagination: a flat limited page in position order, no
-      // cursor. docs/04 §1's cursor convention needs a stable sort key
-      // pair (position isn't unique) — real cursoring is a follow-up
-      // once list views actually need to page past `limit`.
-      return reply.send({
-        items: result.rows,
-        ...(includeColumnValues ? { columnValues: result.values } : {}),
-        next_cursor: null,
-      });
+      switch (outcome.kind) {
+        case "not-found":
+          return notFound(reply);
+        case "bad-filter":
+          return validationErrorDetail(reply, "filter", outcome.error);
+        case "ok":
+          // Simplified pagination: a flat limited page in position order,
+          // no cursor. docs/04 §1's cursor convention needs a stable sort
+          // key pair (position isn't unique) — real cursoring is a
+          // follow-up once list views actually need to page past `limit`.
+          return reply.send({
+            items: outcome.rows,
+            ...(includeColumnValues ? { columnValues: outcome.values } : {}),
+            next_cursor: null,
+          });
+      }
     },
   );
 
