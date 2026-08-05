@@ -58,6 +58,10 @@ jobs:
           echo "DATABASE_URL=postgres://unused/unused" >> apps/api/.env
           echo "APP_DATABASE_URL=postgres://unused/unused" >> apps/api/.env
 
+      - name: Install Playwright Chromium
+        run: pnpm --filter @trellis/e2e exec playwright install --with-deps chromium
+
       - run: pnpm test
+      - run: pnpm --filter @trellis/e2e test:e2e
 
       - run: pnpm build

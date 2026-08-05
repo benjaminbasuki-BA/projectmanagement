@@ -124,19 +124,29 @@ pnpm --filter api test
 
 Covers signup/login/session validation, org and workspace creation, and — the important one — that Row-Level Security actually blocks cross-tenant reads/writes at the database layer, independent of the application code's own filtering (`src/db/tenant-db.test.ts`).
 
+`apps/e2e` uses Playwright against the real web app and the same PGlite API harness. Install Chromium once, then run the core edit, item-panel/comment, and Kanban drag flows:
+
+```bash
+pnpm --filter @trellis/e2e exec playwright install chromium
+pnpm --filter @trellis/e2e test:e2e
+```
+
+The Playwright command starts and seeds both development servers; Docker is not required.
+
 ## Other commands
 
-| Command                         | What it does                                                |
-| ------------------------------- | ----------------------------------------------------------- |
-| `pnpm build`                    | Build all apps/packages (via Turborepo)                     |
-| `pnpm lint`                     | Lint all apps/packages                                      |
-| `pnpm typecheck`                | Type-check all apps/packages                                |
-| `pnpm format`                   | Format the repo with Prettier                               |
-| `pnpm format:check`             | Check formatting without writing                            |
-| `pnpm --filter api test`        | Run the backend integration test suite                      |
-| `pnpm --filter api db:generate` | Generate a Drizzle migration from `apps/api/src/db/schema/` |
-| `pnpm --filter api db:migrate`  | Apply pending migrations                                    |
-| `pnpm --filter api db:studio`   | Open Drizzle Studio against the local database              |
+| Command                               | What it does                                                |
+| ------------------------------------- | ----------------------------------------------------------- |
+| `pnpm build`                          | Build all apps/packages (via Turborepo)                     |
+| `pnpm lint`                           | Lint all apps/packages                                      |
+| `pnpm typecheck`                      | Type-check all apps/packages                                |
+| `pnpm format`                         | Format the repo with Prettier                               |
+| `pnpm format:check`                   | Check formatting without writing                            |
+| `pnpm --filter api test`              | Run the backend integration test suite                      |
+| `pnpm --filter @trellis/e2e test:e2e` | Run the Playwright frontend end-to-end suite                |
+| `pnpm --filter api db:generate`       | Generate a Drizzle migration from `apps/api/src/db/schema/` |
+| `pnpm --filter api db:migrate`        | Apply pending migrations                                    |
+| `pnpm --filter api db:studio`         | Open Drizzle Studio against the local database              |
 
 ## Project structure
 
@@ -144,6 +154,7 @@ Covers signup/login/session validation, org and workspace creation, and — the 
 trellis/
 ├── apps/
 │   ├── web/        # React SPA
+│   ├── e2e/        # Playwright frontend end-to-end suite
 │   └── api/        # Fastify API
 │       ├── drizzle/          # SQL migrations (source of truth for the schema)
 │       └── src/

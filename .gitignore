@@ -14,6 +14,8 @@ pnpm-debug.log*
 .vscode/*
 !.vscode/extensions.json
 coverage/
+test-results/
+playwright-report/
 
 # Machine-local Claude Code permissions — has held a live API key before
 # (a Stitch MCP header), never commit this.
