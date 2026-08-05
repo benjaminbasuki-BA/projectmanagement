@@ -461,6 +461,31 @@ export function updateColumnValues(
   );
 }
 
+// ---- CSV import/export ----
+
+/** A direct-navigation download URL, not a fetch() target — see FilterBar's
+ * `?filter=` shape for the optional filter param. */
+export function exportBoardCsvUrl(boardId: string, filter?: FilterGroup) {
+  const filterParam =
+    filter && filter.rules.length > 0
+      ? `?filter=${encodeURIComponent(JSON.stringify(filter))}`
+      : "";
+  return `${API_URL}/v1/boards/${boardId}/export.csv${filterParam}`;
+}
+
+export function importItems(
+  boardId: string,
+  input: {
+    groupId: string;
+    items: { name: string; columnValues?: Record<string, unknown> }[];
+  },
+) {
+  return request<{ count: number }>(`/v1/boards/${boardId}/import`, {
+    method: "POST",
+    body: input,
+  });
+}
+
 // ---- Comments ----
 
 export function listComments(itemId: string) {

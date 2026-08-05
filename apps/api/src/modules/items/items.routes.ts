@@ -17,7 +17,12 @@ import {
 } from "./schemas.js";
 import { resolveColumnValue } from "./column-values.js";
 import { parseFilterParam, buildFilterCondition } from "./filter.js";
-import { conflict, notFound, validationError } from "../../lib/errors.js";
+import {
+  conflict,
+  notFound,
+  validationError,
+  validationErrorDetail,
+} from "../../lib/errors.js";
 import { recordActivity } from "../../lib/activity.js";
 import {
   subscribeToItem,
@@ -711,17 +716,4 @@ function clampLimit(raw: string | undefined): number {
   const n = raw ? Number.parseInt(raw, 10) : LIST_LIMIT_DEFAULT;
   if (!Number.isFinite(n) || n <= 0) return LIST_LIMIT_DEFAULT;
   return Math.min(n, LIST_LIMIT_MAX);
-}
-
-function validationErrorDetail(
-  reply: Parameters<typeof notFound>[0],
-  field: string,
-  message: string,
-) {
-  return reply.code(422).send({
-    type: "https://docs.trellis.app/errors/validation",
-    title: "Validation failed",
-    status: 422,
-    errors: [{ path: [field], message }],
-  });
 }

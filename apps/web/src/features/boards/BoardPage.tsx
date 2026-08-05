@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Plus, Search, SquareKanban, Table } from "lucide-react";
+import {
+  ChevronRight,
+  Download,
+  Plus,
+  Search,
+  SquareKanban,
+  Table,
+  Upload,
+} from "lucide-react";
 import {
   Button,
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
   EmptyState,
   PageLoader,
@@ -24,6 +33,7 @@ import { ItemPanel } from "../items/ItemPanel";
 import { TableView } from "../views/table/TableView";
 import { KanbanView } from "../views/kanban/KanbanView";
 import { FilterBar } from "./FilterBar";
+import { CsvImportWizard } from "./CsvImportWizard";
 
 type ItemsPayload = { items: Item[]; columnValues: ColumnValue[] };
 
@@ -80,6 +90,7 @@ export function BoardPage() {
 
   const [search, setSearch] = useState("");
   const [renamingBoard, setRenamingBoard] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Reset filters when navigating to a different board — a filter built
   // for one board's columns is meaningless (and may reference column ids
@@ -332,6 +343,30 @@ export function BoardPage() {
         {columns.length > 0 && (
           <FilterBar columns={columns} filter={filter} onChange={setFilter} />
         )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline">
+              Import/Export
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-44">
+            <DropdownMenuItem
+              disabled={groups.length === 0}
+              onSelect={() => setImportOpen(true)}
+            >
+              <Upload size={14} className="text-neutral-400" />
+              Import CSV…
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() =>
+                window.open(api.exportBoardCsvUrl(boardId, filter), "_blank")
+              }
+            >
+              <Download size={14} className="text-neutral-400" />
+              Export CSV
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <span className="ml-auto text-sm text-neutral-400">
           {items.length} {items.length === 1 ? "item" : "items"}
         </span>
@@ -416,6 +451,14 @@ export function BoardPage() {
           onClose={() => openItem(null)}
         />
       )}
+
+      <CsvImportWizard
+        boardId={boardId}
+        columns={columns}
+        groups={groups}
+        open={importOpen}
+        onOpenChange={setImportOpen}
+      />
     </div>
   );
 }

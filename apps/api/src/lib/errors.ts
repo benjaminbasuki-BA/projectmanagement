@@ -38,3 +38,20 @@ export function conflict(
     detail,
   });
 }
+
+/** Single-field validation failure that didn't come from a zod parse
+ * (e.g. a field valid a top-level schema but wrong in a deeper,
+ * hand-checked way) — same `errors[]` shape as validationError so
+ * clients don't need two error formats. */
+export function validationErrorDetail(
+  reply: FastifyReply,
+  field: string,
+  message: string,
+) {
+  return reply.code(422).send({
+    type: "https://docs.trellis.app/errors/validation",
+    title: "Validation failed",
+    status: 422,
+    errors: [{ path: [field], message }],
+  });
+}
