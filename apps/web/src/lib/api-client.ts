@@ -383,9 +383,24 @@ export function createColumn(
 
 // ---- Items ----
 
-export function listItems(boardId: string) {
+/** Same shape the API expects at ?filter= (doc04 §3.4, doc02 §4.1). */
+export interface FilterRule {
+  column_id: string;
+  cmp: string;
+  value?: unknown;
+}
+export interface FilterGroup {
+  op: "and" | "or";
+  rules: FilterRule[];
+}
+
+export function listItems(boardId: string, filter?: FilterGroup) {
+  const filterParam =
+    filter && filter.rules.length > 0
+      ? `&filter=${encodeURIComponent(JSON.stringify(filter))}`
+      : "";
   return request<{ items: Item[]; columnValues: ColumnValue[] }>(
-    `/v1/boards/${boardId}/items?include=column_values`,
+    `/v1/boards/${boardId}/items?include=column_values${filterParam}`,
   );
 }
 

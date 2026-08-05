@@ -13,7 +13,7 @@ import {
   cn,
 } from "@trellis/ui";
 import * as api from "../../lib/api-client";
-import type { ColumnValue, Item } from "../../lib/api-client";
+import type { ColumnValue, FilterGroup, Item } from "../../lib/api-client";
 import { useBoard, useGroups, useColumns, useItems } from "../../lib/queries";
 import { useShell } from "../../app/AppShell";
 import { DEFAULT_STATUS_SETTINGS } from "./defaults";
@@ -23,6 +23,7 @@ import { COLUMN_TYPE_META, ColumnTypeMenuItems } from "../items/cells";
 import { ItemPanel } from "../items/ItemPanel";
 import { TableView } from "../views/table/TableView";
 import { KanbanView } from "../views/kanban/KanbanView";
+import { FilterBar } from "./FilterBar";
 
 type ItemsPayload = { items: Item[]; columnValues: ColumnValue[] };
 
@@ -62,10 +63,12 @@ export function BoardPage() {
       { replace: true },
     );
 
+  const [filter, setFilter] = useState<FilterGroup>({ op: "and", rules: [] });
+
   const boardQuery = useBoard(boardId);
   const groupsQuery = useGroups(boardId);
   const columnsQuery = useColumns(boardId);
-  const itemsQuery = useItems(boardId);
+  const itemsQuery = useItems(boardId, filter);
 
   const board = boardQuery.data?.board;
   const groups = groupsQuery.data?.groups ?? [];
@@ -77,6 +80,15 @@ export function BoardPage() {
 
   const [search, setSearch] = useState("");
   const [renamingBoard, setRenamingBoard] = useState(false);
+
+  // Reset filters when navigating to a different board — a filter built
+  // for one board's columns is meaningless (and may reference column ids
+  // that don't exist) on another.
+  const [filterForBoard, setFilterForBoard] = useState(boardId);
+  if (boardId !== filterForBoard) {
+    setFilterForBoard(boardId);
+    setFilter({ op: "and", rules: [] });
+  }
 
   // Feed the Home "pick up where you left off" row (doc 11 §B.3).
   useEffect(() => {
@@ -317,6 +329,9 @@ export function BoardPage() {
             <ColumnTypeMenuItems onPick={(t) => addColumn.mutate(t)} />
           </DropdownMenuContent>
         </DropdownMenu>
+        {columns.length > 0 && (
+          <FilterBar columns={columns} filter={filter} onChange={setFilter} />
+        )}
         <span className="ml-auto text-sm text-neutral-400">
           {items.length} {items.length === 1 ? "item" : "items"}
         </span>

@@ -52,10 +52,10 @@ export function useColumns(boardId: string) {
   });
 }
 
-export function useItems(boardId: string) {
+export function useItems(boardId: string, filter?: api.FilterGroup) {
   return useQuery({
-    queryKey: ["items", boardId],
-    queryFn: () => api.listItems(boardId),
+    queryKey: ["items", boardId, filter ?? null],
+    queryFn: () => api.listItems(boardId, filter),
   });
 }
 
