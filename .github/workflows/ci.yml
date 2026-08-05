@@ -40,14 +40,24 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
 
+      # api/src/config/env.ts requires DATABASE_URL/APP_DATABASE_URL to be
+      # set even though the test suite never actually connects — every
+      # test builds its own server against an in-memory PGlite instance
+      # (test/db.ts), never apps/api/src/db/client.ts. Values just need to
+      # satisfy the non-empty-string check.
+      #
+      # Written as a real .env file (env.ts loads via dotenv/config)
+      # instead of a step-level `env:` block: a prior version of this
+      # workflow set them that way and it worked when reproduced locally
+      # but still failed in the actual GitHub Actions run with env.ts's
+      # own process.exit(1) — turbo's env-var pass-through to nested task
+      # processes wasn't reliable enough to trust here, and this sidesteps
+      # it by reading from disk instead of inherited process.env.
+      - name: Write dummy env for apps/api tests
+        run: |
+          echo "DATABASE_URL=postgres://unused/unused" >> apps/api/.env
+          echo "APP_DATABASE_URL=postgres://unused/unused" >> apps/api/.env
+
       - run: pnpm test
-        env:
-          # api/src/config/env.ts requires these to be set even though the
-          # test suite never actually connects — every test builds its own
-          # server against an in-memory PGlite instance (test/db.ts), never
-          # apps/api/src/db/client.ts. Values just need to satisfy the
-          # non-empty-string check.
-          DATABASE_URL: postgres://unused/unused
-          APP_DATABASE_URL: postgres://unused/unused
 
       - run: pnpm build
