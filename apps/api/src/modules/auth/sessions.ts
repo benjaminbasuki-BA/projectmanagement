@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from "node:crypto";
-import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import type { FastifyReply } from "fastify";
 // Side-effect import: augments FastifyReply with setCookie/clearCookie.
 import "@fastify/cookie";
@@ -111,6 +111,73 @@ export async function revokeSession(
     .update(sessions)
     .set({ revokedAt: new Date() })
     .where(eq(sessions.id, sessionId));
+}
+
+export interface SessionSummary {
+  id: string;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: Date;
+  lastSeenAt: Date;
+}
+
+/** docs/04 §2.1 `GET /auth/sessions` — the "sign out everywhere" screen. */
+export async function listActiveSessions(
+  db: AppDb,
+  userId: string,
+): Promise<SessionSummary[]> {
+  return db
+    .select({
+      id: sessions.id,
+      ip: sessions.ip,
+      userAgent: sessions.userAgent,
+      createdAt: sessions.createdAt,
+      lastSeenAt: sessions.lastSeenAt,
+    })
+    .from(sessions)
+    .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
+    .orderBy(desc(sessions.lastSeenAt));
+}
+
+/** `DELETE /auth/sessions` — revokes every session except the caller's own. */
+export async function revokeOtherSessions(
+  db: AppDb,
+  userId: string,
+  currentSessionId: string,
+): Promise<void> {
+  await db
+    .update(sessions)
+    .set({ revokedAt: new Date() })
+    .where(
+      and(
+        eq(sessions.userId, userId),
+        isNull(sessions.revokedAt),
+        ne(sessions.id, currentSessionId),
+      ),
+    );
+}
+
+/**
+ * `DELETE /auth/sessions/{id}` — revokes one, scoped to the caller so a
+ * session id can't be used to sign someone else out.
+ */
+export async function revokeOwnSession(
+  db: AppDb,
+  userId: string,
+  sessionId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .update(sessions)
+    .set({ revokedAt: new Date() })
+    .where(
+      and(
+        eq(sessions.id, sessionId),
+        eq(sessions.userId, userId),
+        isNull(sessions.revokedAt),
+      ),
+    )
+    .returning({ id: sessions.id });
+  return Boolean(row);
 }
 
 export async function setActiveOrg(

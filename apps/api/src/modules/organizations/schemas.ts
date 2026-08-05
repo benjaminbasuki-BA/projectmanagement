@@ -13,3 +13,18 @@ export const createOrganizationSchema = z.object({
     ),
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
+
+/** Logo upload isn't included — no files/S3 module exists yet (avatar_file_id
+ * / logo_file_id are reserved columns; see docs/02 §1). */
+export const updateOrganizationSchema = z.object({
+  name: z.string().min(1).max(100),
+});
+
+export const inviteMemberSchema = z.object({
+  email: z.string().email(),
+  role: z.enum(["admin", "member"]),
+});
+
+export const updateMemberSchema = z.object({
+  role: z.enum(["admin", "member"]),
+});

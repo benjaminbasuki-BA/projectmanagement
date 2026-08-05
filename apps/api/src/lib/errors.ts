@@ -25,6 +25,22 @@ export function notFound(reply: FastifyReply) {
   });
 }
 
+/**
+ * Insufficient role *within* a tenant the caller is legitimately a
+ * member of (e.g. a member hitting an admin-only route) — distinct from
+ * `notFound`, which is for cross-tenant access where existence itself
+ * must not leak. Here the resource's existence is already known to the
+ * caller, so a plain 403 doesn't leak anything.
+ */
+export function forbidden(reply: FastifyReply, detail: string) {
+  return reply.code(403).send({
+    type: "https://docs.trellis.app/errors/forbidden",
+    title: "Forbidden",
+    status: 403,
+    detail,
+  });
+}
+
 export function conflict(
   reply: FastifyReply,
   status: 409 | 422,

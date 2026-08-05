@@ -88,3 +88,18 @@ export function useUnreadNotificationCount() {
     refetchInterval: 30_000,
   });
 }
+
+export function useOrg() {
+  return useQuery({ queryKey: ["org"], queryFn: api.getOrg });
+}
+
+export function useOrgMembers() {
+  return useQuery({
+    queryKey: ["org", "members"],
+    queryFn: api.listOrgMembers,
+  });
+}
+
+export function useSessions() {
+  return useQuery({ queryKey: ["sessions"], queryFn: api.listSessions });
+}

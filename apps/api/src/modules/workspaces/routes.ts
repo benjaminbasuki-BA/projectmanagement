@@ -1,8 +1,10 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
 import { workspaces, workspaceMembers } from "../../db/schema/index.js";
 import { withTenantContext } from "../../db/tenant-db.js";
-import { createWorkspaceSchema } from "./schemas.js";
+import { createWorkspaceSchema, updateWorkspaceSchema } from "./schemas.js";
+import { forbidden, notFound, validationError } from "../../lib/errors.js";
+import { recordAuditEvent } from "../audit/index.js";
 
 /**
  * docs/04-api-design.md §2.3. Both routes demonstrate the actual point
@@ -56,6 +58,16 @@ export const workspacesRoutes: FastifyPluginAsync = async (app) => {
           isOwner: true,
         });
 
+        await recordAuditEvent(tx, {
+          orgId,
+          actorId: userId,
+          actorIp: request.ip,
+          event: "workspace.created",
+          targetType: "workspace",
+          targetId: created.id,
+          metadata: { name: created.name },
+        });
+
         return created;
       });
 
@@ -83,6 +95,39 @@ export const workspacesRoutes: FastifyPluginAsync = async (app) => {
       );
 
       return reply.send({ workspaces: rows });
+    },
+  );
+
+  // docs/01 §2.8 admin console "workspace management" — rename only;
+  // creation/deletion of *multiple* workspaces is out of MVP scope
+  // (CLAUDE.md: "single workspace per account"), so this covers the
+  // one workspace-management action MVP actually needs.
+  app.patch(
+    "/workspaces/:id",
+    { preHandler: [app.authenticate, app.requireOrgContext] },
+    async (request, reply) => {
+      const { orgId, role } = request.tenant!;
+      if (role !== "admin") {
+        return forbidden(reply, "Only an admin can rename a workspace.");
+      }
+      const { id } = request.params as { id: string };
+      const parsed = updateWorkspaceSchema.safeParse(request.body);
+      if (!parsed.success) return validationError(reply, parsed.error);
+
+      const [updated] = await withTenantContext(app.db, orgId, (tx) =>
+        tx
+          .update(workspaces)
+          .set({ name: parsed.data.name })
+          .where(and(eq(workspaces.id, id), eq(workspaces.orgId, orgId)))
+          .returning({
+            id: workspaces.id,
+            name: workspaces.name,
+            type: workspaces.type,
+          }),
+      );
+
+      if (!updated) return notFound(reply);
+      return reply.send({ workspace: updated });
     },
   );
 };

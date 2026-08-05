@@ -12,6 +12,7 @@ import { Button, Input, PageLoader } from "@trellis/ui";
 import * as api from "../../lib/api-client";
 import { useMe } from "../../lib/queries";
 import { errorMessage } from "../../lib/errors";
+import { SettingsNav } from "./SettingsNav";
 
 /**
  * Account security. 2FA enrollment is three steps on purpose — scan,
@@ -24,6 +25,7 @@ export function SecurityPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-8 py-10">
+      <SettingsNav />
       <header className="mb-8">
         <h1 className="font-display text-[28px] leading-tight font-semibold text-ink">
           Security

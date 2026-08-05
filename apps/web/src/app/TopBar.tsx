@@ -3,6 +3,7 @@ import { useMatch, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
+  Building2,
   ChevronDown,
   Inbox,
   LayoutTemplate,
@@ -10,6 +11,7 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  User,
 } from "lucide-react";
 import {
   Avatar,
@@ -281,9 +283,17 @@ export function TopBar({
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => navigate("/settings/profile")}>
+            <User size={14} className="text-neutral-400" />
+            Profile
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => navigate("/settings/security")}>
             <ShieldCheck size={14} className="text-neutral-400" />
             Security
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => navigate("/settings/organization")}>
+            <Building2 size={14} className="text-neutral-400" />
+            Organization
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => logout.mutate()}>

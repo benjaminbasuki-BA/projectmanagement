@@ -12,7 +12,10 @@ import {
   twoFactorRoutes,
   googleOAuthRoutes,
 } from "./modules/auth/index.js";
-import { organizationsRoutes } from "./modules/organizations/index.js";
+import {
+  organizationsRoutes,
+  dataExportRoutes,
+} from "./modules/organizations/index.js";
 import { workspacesRoutes } from "./modules/workspaces/index.js";
 import { boardsModuleRoutes } from "./modules/boards/index.js";
 import { itemsModuleRoutes } from "./modules/items/index.js";
@@ -97,6 +100,7 @@ export async function buildServer(db: AppDb) {
   await app.register(twoFactorRoutes, { prefix: "/v1" });
   await app.register(googleOAuthRoutes, { prefix: "/v1" });
   await app.register(organizationsRoutes, { prefix: "/v1" });
+  await app.register(dataExportRoutes, { prefix: "/v1" });
   await app.register(workspacesRoutes, { prefix: "/v1" });
   await app.register(boardsModuleRoutes, { prefix: "/v1" });
   await app.register(itemsModuleRoutes, { prefix: "/v1" });

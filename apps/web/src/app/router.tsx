@@ -4,9 +4,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AuthPage } from "../features/auth/AuthPage";
 import { ForgotPasswordPage } from "../features/auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "../features/auth/ResetPasswordPage";
+import { InvitePage, takePendingInvite } from "../features/auth/InvitePage";
 import { HomePage } from "../features/home/HomePage";
 import { BoardPage } from "../features/boards/BoardPage";
 import { SecurityPage } from "../features/settings/SecurityPage";
+import { ProfilePage } from "../features/settings/ProfilePage";
+import { OrganizationPage } from "../features/settings/OrganizationPage";
 import { AppShell } from "./AppShell";
 import { useMe } from "../lib/queries";
 import * as api from "../lib/api-client";
@@ -56,10 +59,30 @@ function RequireAuth({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const attempted = useRef(false);
   const orgAttempted = useRef(false);
+  const inviteAttempted = useRef(false);
   const [bypassFailed, setBypassFailed] = useState<string | null>(null);
   // Set once the dev org attach has finished, successfully or not, so a
   // failure falls through to the real screen instead of looping a spinner.
   const [orgAttachSettled, setOrgAttachSettled] = useState(false);
+
+  // Picks up an invite stashed by InvitePage before it sent the invitee
+  // off to /login or /signup (they had no session yet to accept with).
+  // Runs for every signed-in user, not just the dev bypass — this is the
+  // real accept path for a brand-new invitee.
+  useEffect(() => {
+    if (!me || inviteAttempted.current) return;
+    const pending = takePendingInvite();
+    if (!pending) return;
+    inviteAttempted.current = true;
+    (async () => {
+      try {
+        await api.acceptInvite(pending.orgId, pending.token);
+        await queryClient.invalidateQueries({ queryKey: ["me"] });
+      } catch (err) {
+        console.error("Couldn't accept the pending invite", err);
+      }
+    })();
+  }, [me, queryClient]);
 
   const deliberatelySignedOut =
     DEV_AUTH_BYPASS && sessionStorage.getItem(SIGNED_OUT_KEY) === "1";
@@ -167,6 +190,10 @@ export const router = createBrowserRouter([
   // Reachable while signed in: the emailed link should work even if the
   // browser still holds a session for the account being recovered.
   { path: "/reset-password", element: <ResetPasswordPage /> },
+  // Reachable either way — an invitee may not have a session yet at all
+  // (see InvitePage: it stashes the invite and sends them to sign
+  // up/in, then RequireAuth finishes the accept once they're back).
+  { path: "/invite/:orgId/:token", element: <InvitePage /> },
   {
     element: (
       <RequireAuth>
@@ -176,7 +203,9 @@ export const router = createBrowserRouter([
     children: [
       { path: "/", element: <HomePage /> },
       { path: "/boards/:boardId", element: <BoardPage /> },
+      { path: "/settings/profile", element: <ProfilePage /> },
       { path: "/settings/security", element: <SecurityPage /> },
+      { path: "/settings/organization", element: <OrganizationPage /> },
     ],
   },
 ]);

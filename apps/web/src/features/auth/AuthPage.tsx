@@ -31,7 +31,7 @@ export function AuthPage({ mode }: { mode: "login" | "signup" }) {
   const [searchParams] = useSearchParams();
 
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [touched, setTouched] = useState(false);

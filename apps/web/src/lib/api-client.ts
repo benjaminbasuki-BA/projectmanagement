@@ -593,3 +593,133 @@ export function searchOrgUsers(query: string) {
     `/v1/users?query=${encodeURIComponent(query)}`,
   );
 }
+
+// ---- Profile ----
+
+export function updateProfile(input: {
+  name?: string;
+  timezone?: string;
+  locale?: string;
+}) {
+  return request<{ user: User }>("/v1/users/me", {
+    method: "PATCH",
+    body: input,
+  });
+}
+
+// ---- Sessions ("sign out everywhere") ----
+
+export interface Session {
+  id: string;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  lastSeenAt: string;
+  isCurrent: boolean;
+}
+
+export function listSessions() {
+  return request<{ sessions: Session[] }>("/v1/auth/sessions");
+}
+
+export function revokeOtherSessions() {
+  return request<void>("/v1/auth/sessions", { method: "DELETE" });
+}
+
+export function revokeSession(sessionId: string) {
+  return request<void>(`/v1/auth/sessions/${sessionId}`, {
+    method: "DELETE",
+  });
+}
+
+// ---- Org settings + member management ----
+
+export interface OrgSettings {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  memberCount: number;
+}
+
+export function getOrg() {
+  return request<{ organization: OrgSettings; role: string }>("/v1/org");
+}
+
+export function updateOrg(input: { name: string }) {
+  return request<{ organization: OrgSettings }>("/v1/org", {
+    method: "PATCH",
+    body: input,
+  });
+}
+
+export interface OrgMember {
+  id: string;
+  userId: string | null;
+  role: string;
+  joinedAt: string;
+  deactivatedAt: string | null;
+  name: string | null;
+  email: string;
+  invitePending: boolean;
+  inviteExpiresAt: string | null;
+}
+
+export function listOrgMembers() {
+  return request<{ members: OrgMember[] }>("/v1/org/members");
+}
+
+export function inviteMember(input: {
+  email: string;
+  role: "admin" | "member";
+}) {
+  return request<{ message: string }>("/v1/org/invites", {
+    method: "POST",
+    body: input,
+  });
+}
+
+export function updateMemberRole(
+  membershipId: string,
+  role: "admin" | "member",
+) {
+  return request<{ member: OrgMember }>(`/v1/org/members/${membershipId}`, {
+    method: "PATCH",
+    body: { role },
+  });
+}
+
+export function deactivateMember(membershipId: string) {
+  return request<void>(`/v1/org/members/${membershipId}`, {
+    method: "DELETE",
+  });
+}
+
+export function previewInvite(orgId: string, token: string) {
+  return request<{ orgName: string; email: string; hasAccount: boolean }>(
+    `/v1/organizations/${orgId}/invites/${token}`,
+  );
+}
+
+export function acceptInvite(orgId: string, token: string) {
+  return request<{ activeOrgId: string }>(
+    `/v1/organizations/${orgId}/invites/${token}/accept`,
+    { method: "POST" },
+  );
+}
+
+// ---- Workspace management ----
+
+export function renameWorkspace(workspaceId: string, name: string) {
+  return request<{ workspace: Workspace }>(`/v1/workspaces/${workspaceId}`, {
+    method: "PATCH",
+    body: { name },
+  });
+}
+
+// ---- Full data export ----
+
+/** Direct-navigation download URL, not a fetch() target. */
+export function exportAllDataUrl() {
+  return `${API_URL}/v1/org/export.zip`;
+}

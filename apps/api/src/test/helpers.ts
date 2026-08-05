@@ -39,10 +39,11 @@ export async function signupPlain(app: FastifyInstance, email: string) {
 }
 
 /**
- * There's no org-invite endpoint yet (a real gap — see the notifications
- * task's summary), so "a second real member of the same org" has to be
- * set up directly against the test DB rather than through the HTTP API.
- * Everything downstream of this still exercises real routes.
+ * `POST /org/invites` (organizations/routes.ts) now covers this end to
+ * end — see organizations/admin.test.ts for tests that actually exercise
+ * invite → accept over HTTP. This direct-DB shortcut stays because most
+ * *other* tests just need "a second real member of the same org" as
+ * setup, not a reason to re-run the invite flow every time.
  */
 export async function addOrgMember(db: AppDb, orgId: string, userId: string) {
   await withTenantContext(db, orgId, (tx) =>

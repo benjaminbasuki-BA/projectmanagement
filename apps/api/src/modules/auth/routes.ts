@@ -9,11 +9,15 @@ import {
   setSessionCookie,
   clearSessionCookie,
   resumeLastActiveOrg,
+  listActiveSessions,
+  revokeOtherSessions,
+  revokeOwnSession,
 } from "./sessions.js";
 import { createTwoFactorChallenge } from "./two-factor.js";
 import { mailTransport } from "./mailer.js";
 import { googleOAuthConfigured } from "../../config/env.js";
-import { signupSchema, loginSchema } from "./schemas.js";
+import { signupSchema, loginSchema, updateProfileSchema } from "./schemas.js";
+import { notFound, validationError } from "../../lib/errors.js";
 
 /**
  * docs/04-api-design.md §2.1 (Auth). Email verification, Google OAuth,
@@ -225,6 +229,79 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         organization: row?.organization ?? null,
         role: row?.role ?? null,
       });
+    },
+  );
+
+  // docs/04 §2.2 `PATCH /users/me` — profile settings screen.
+  app.patch(
+    "/users/me",
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      const parsed = updateProfileSchema.safeParse(request.body);
+      if (!parsed.success) return validationError(reply, parsed.error);
+      if (Object.keys(parsed.data).length === 0) {
+        return reply.send({ user: request.authSession!.user });
+      }
+
+      const [updated] = await app.db
+        .update(users)
+        .set(parsed.data)
+        .where(eq(users.id, request.authSession!.user.id))
+        .returning({ id: users.id, email: users.email, name: users.name });
+
+      return reply.send({ user: updated });
+    },
+  );
+
+  // docs/04 §2.1 — the "sign out everywhere" console.
+  app.get(
+    "/auth/sessions",
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      const authSession = request.authSession!;
+      const rows = await listActiveSessions(app.db, authSession.user.id);
+      const sessionsOut = rows.map((s) => ({
+        ...s,
+        isCurrent: s.id === authSession.sessionId,
+      }));
+      return reply.send({ sessions: sessionsOut });
+    },
+  );
+
+  app.delete(
+    "/auth/sessions",
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      const authSession = request.authSession!;
+      await revokeOtherSessions(
+        app.db,
+        authSession.user.id,
+        authSession.sessionId,
+      );
+      return reply.code(204).send();
+    },
+  );
+
+  app.delete(
+    "/auth/sessions/:id",
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const authSession = request.authSession!;
+      // Revoking the session you're currently on is just `/auth/logout`
+      // in disguise but with the wrong response shape (204 vs a cleared
+      // cookie) — steer callers there instead of half-logging them out.
+      if (id === authSession.sessionId) {
+        return reply.code(409).send({
+          type: "https://docs.trellis.app/errors/conflict",
+          title: "Conflict",
+          status: 409,
+          detail: "Use POST /auth/logout to sign out of the current session.",
+        });
+      }
+      const revoked = await revokeOwnSession(app.db, authSession.user.id, id);
+      if (!revoked) return notFound(reply);
+      return reply.code(204).send();
     },
   );
 };
