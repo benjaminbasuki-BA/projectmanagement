@@ -300,11 +300,28 @@ export function listBoards(workspaceId: string) {
   return request<{ boards: Board[] }>(`/v1/workspaces/${workspaceId}/boards`);
 }
 
-export function createBoard(workspaceId: string, input: { name: string }) {
+export function createBoard(
+  workspaceId: string,
+  input: { name: string; templateId?: string },
+) {
   return request<{ board: Board }>(`/v1/workspaces/${workspaceId}/boards`, {
     method: "POST",
     body: input,
   });
+}
+
+export interface BoardTemplateSummary {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  explainer: string;
+  columnCount: number;
+  sampleItemCount: number;
+}
+
+export function listTemplates() {
+  return request<{ templates: BoardTemplateSummary[] }>("/v1/templates");
 }
 
 export function getBoard(boardId: string) {

@@ -1,10 +1,19 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { boards, boardMembers } from "../../db/schema/index.js";
+import {
+  boards,
+  boardMembers,
+  boardGroups,
+  columns as columnsTable,
+  items,
+  columnValues,
+  organizations,
+} from "../../db/schema/index.js";
 import { withTenantContext } from "../../db/tenant-db.js";
 import { getAccessibleWorkspace, getAccessibleBoard } from "./access.js";
 import { createBoardSchema, updateBoardSchema } from "./schemas.js";
-import { notFound, validationError } from "../../lib/errors.js";
+import { conflict, notFound, validationError } from "../../lib/errors.js";
+import { getTemplate, type BoardTemplate } from "./templates.js";
 import type { AppDb } from "../../db/types.js";
 
 /** docs/04-api-design.md §2.4 (board-level routes; groups/columns/views
@@ -20,16 +29,26 @@ export const boardsRoutes: FastifyPluginAsync = async (app) => {
       const { workspaceId } = request.params as { workspaceId: string };
       const { orgId } = request.tenant!;
       const userId = request.authSession!.user.id;
-      const { name, description, type } = parsed.data;
+      const { name, description, type, templateId } = parsed.data;
 
-      const board = await withTenantContext(app.db, orgId, async (tx) => {
+      const template = templateId ? getTemplate(templateId) : undefined;
+      if (templateId && !template) {
+        return conflict(
+          reply,
+          422,
+          "unknown-template",
+          `No starter template with id "${templateId}".`,
+        );
+      }
+
+      const outcome = await withTenantContext(app.db, orgId, async (tx) => {
         const workspace = await getAccessibleWorkspace(
           tx,
           orgId,
           userId,
           workspaceId,
         );
-        if (!workspace) return null;
+        if (!workspace) return { kind: "not-found" as const };
 
         const [created] = await tx
           .insert(boards)
@@ -55,11 +74,19 @@ export const boardsRoutes: FastifyPluginAsync = async (app) => {
           });
         }
 
-        return created;
+        if (template) {
+          await instantiateTemplate(tx, orgId, userId, created.id, template);
+          // `created` is the pre-instantiation insert result — itemCount
+          // was still its 0 default at that point, so it needs to reflect
+          // what instantiateTemplate just set, not what the INSERT saw.
+          created.itemCount = template.items.length;
+        }
+
+        return { kind: "ok" as const, board: created };
       });
 
-      if (!board) return notFound(reply);
-      return reply.code(201).send({ board });
+      if (outcome.kind === "not-found") return notFound(reply);
+      return reply.code(201).send({ board: outcome.board });
     },
   );
 
@@ -227,4 +254,181 @@ async function archiveBoard(
 
   if (!board) return notFound(reply);
   return reply.send({ board });
+}
+
+/**
+ * Populates a freshly created (still-empty) board with a starter
+ * template's groups, columns, and sample items, all inside the caller's
+ * transaction. Trusted static content (templates.ts), not user input —
+ * so this skips the request-time validation items.routes.ts runs on a
+ * real POST /items, but still derives text_value/number_value/date_value
+ * the same way (Appendix A) so filtering/sorting on templated items
+ * works identically to hand-created ones.
+ */
+async function instantiateTemplate(
+  tx: AppDb,
+  orgId: string,
+  userId: string,
+  boardId: string,
+  template: BoardTemplate,
+) {
+  const groupIds: string[] = [];
+  for (let i = 0; i < template.groups.length; i++) {
+    const g = template.groups[i]!;
+    const [row] = await tx
+      .insert(boardGroups)
+      .values({
+        orgId,
+        boardId,
+        title: g.title,
+        color: g.color,
+        position: String(Date.now() + i),
+      })
+      .returning({ id: boardGroups.id });
+    groupIds.push(row!.id);
+  }
+
+  const columnIds: string[] = [];
+  for (let i = 0; i < template.columns.length; i++) {
+    const c = template.columns[i]!;
+    const [row] = await tx
+      .insert(columnsTable)
+      .values({
+        orgId,
+        boardId,
+        title: c.title,
+        type: c.type,
+        settings: c.settings ?? {},
+        position: String(Date.now() + i),
+      })
+      .returning({ id: columnsTable.id });
+    columnIds.push(row!.id);
+  }
+  const firstPersonColumnIndex = template.columns.findIndex(
+    (c) => c.type === "person",
+  );
+
+  for (let i = 0; i < template.items.length; i++) {
+    const item = template.items[i]!;
+    const [{ itemDisplaySeq }] = await tx
+      .update(organizations)
+      .set({ itemDisplaySeq: sql`${organizations.itemDisplaySeq} + 1` })
+      .where(eq(organizations.id, orgId))
+      .returning({ itemDisplaySeq: organizations.itemDisplaySeq });
+
+    const [createdItem] = await tx
+      .insert(items)
+      .values({
+        orgId,
+        boardId,
+        groupId: groupIds[item.groupIndex]!,
+        displaySeq: itemDisplaySeq,
+        name: item.name,
+        position: String(Date.now() + i),
+        createdBy: userId,
+      })
+      .returning({ id: items.id });
+
+    const values = { ...item.values };
+    if (item.assignToCreator && firstPersonColumnIndex >= 0) {
+      values[firstPersonColumnIndex] ??= { user_ids: [userId] };
+    }
+
+    for (const [columnIndexStr, raw] of Object.entries(values)) {
+      const column = template.columns[Number(columnIndexStr)]!;
+      const extracted = extractTemplateValue(column, raw);
+      await tx.insert(columnValues).values({
+        itemId: createdItem!.id,
+        columnId: columnIds[Number(columnIndexStr)]!,
+        orgId,
+        boardId,
+        value: extracted.value,
+        textValue: extracted.textValue,
+        numberValue: extracted.numberValue?.toString(),
+        dateValue: extracted.dateValue,
+        updatedBy: userId,
+      });
+    }
+  }
+
+  await tx
+    .update(boards)
+    .set({ itemCount: template.items.length })
+    .where(eq(boards.id, boardId));
+}
+
+/** Appendix A extraction (docs/02), trusted-input version — see
+ * items/column-values.ts's resolveColumnValue for the validated one. */
+function extractTemplateValue(
+  column: BoardTemplate["columns"][number],
+  raw: unknown,
+): {
+  value: Record<string, unknown>;
+  textValue: string | null;
+  numberValue: number | null;
+  dateValue: Date | null;
+} {
+  const value = raw as Record<string, unknown>;
+  switch (column.type) {
+    case "status": {
+      const labels = (column.settings?.labels ?? []) as {
+        id: string;
+        text: string;
+      }[];
+      const label = labels.find((l) => l.id === value.label_id);
+      return {
+        value,
+        textValue: label?.text ?? null,
+        numberValue: null,
+        dateValue: null,
+      };
+    }
+    case "text":
+    case "long_text":
+      return {
+        value,
+        textValue: (value.text as string) ?? null,
+        numberValue: null,
+        dateValue: null,
+      };
+    case "number":
+      return {
+        value,
+        textValue: null,
+        numberValue: (value.number as number) ?? null,
+        dateValue: null,
+      };
+    case "person":
+      return { value, textValue: null, numberValue: null, dateValue: null };
+    case "date": {
+      const time = (value.time as string | null) ?? "00:00";
+      return {
+        value,
+        textValue: null,
+        numberValue: null,
+        dateValue: new Date(`${value.date as string}T${time}:00.000Z`),
+      };
+    }
+    case "dropdown": {
+      const options = (column.settings?.options ?? []) as {
+        id: string;
+        text: string;
+      }[];
+      const ids = (value.option_ids as string[]) ?? [];
+      const textValue =
+        ids
+          .map((id) => options.find((o) => o.id === id)?.text ?? id)
+          .join(", ") || null;
+      return { value, textValue, numberValue: null, dateValue: null };
+    }
+    case "checkbox":
+      return {
+        value,
+        textValue: null,
+        numberValue: value.checked ? 1 : 0,
+        dateValue: null,
+      };
+    default:
+      return { value, textValue: null, numberValue: null, dateValue: null };
+  }
 }

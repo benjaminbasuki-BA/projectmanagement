@@ -5,6 +5,8 @@ export const createBoardSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(2000).optional(),
   type: z.enum(["main", "private"]).default("main"),
+  // docs/04 §2.4: "template_id?" — one of the 6 MVP starters (templates.ts).
+  templateId: z.string().optional(),
 });
 export type CreateBoardInput = z.infer<typeof createBoardSchema>;
 

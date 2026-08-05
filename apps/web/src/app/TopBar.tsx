@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useMatch, useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   ChevronDown,
   Inbox,
+  LayoutTemplate,
   LogOut,
   Plus,
   Search,
@@ -27,6 +28,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  cn,
 } from "@trellis/ui";
 import * as api from "../lib/api-client";
 import type { Me, Notification, Workspace } from "../lib/api-client";
@@ -95,7 +97,24 @@ export function TopBar({
 
   const [boardDialogOpen, setBoardDialogOpen] = useState(false);
   const [boardName, setBoardName] = useState("");
+  const [templateId, setTemplateId] = useState<string | null>(null);
+  const [nameEdited, setNameEdited] = useState(false);
   const createBoard = useCreateBoard(workspace?.id);
+  const templatesQuery = useQuery({
+    queryKey: ["templates"],
+    queryFn: api.listTemplates,
+    enabled: boardDialogOpen,
+  });
+  const templates = templatesQuery.data?.templates ?? [];
+
+  const pickTemplate = (id: string | null) => {
+    setTemplateId(id);
+    // Pre-fill the name from the template, but only until the user
+    // actually types their own — don't clobber a name they chose.
+    if (!nameEdited) {
+      setBoardName(id ? (templates.find((t) => t.id === id)?.name ?? "") : "");
+    }
+  };
 
   const { data: unreadCount } = useUnreadNotificationCount();
   const { data: notificationsData } = useNotifications();
@@ -275,27 +294,87 @@ export function TopBar({
       </DropdownMenu>
 
       {/* New board dialog */}
-      <Dialog open={boardDialogOpen} onOpenChange={setBoardDialogOpen}>
-        <DialogContent>
+      <Dialog
+        open={boardDialogOpen}
+        onOpenChange={(open) => {
+          setBoardDialogOpen(open);
+          if (!open) {
+            setBoardName("");
+            setTemplateId(null);
+            setNameEdited(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
           <DialogTitle>New board</DialogTitle>
           <form
             className="mt-4 flex flex-col gap-3"
             onSubmit={(e) => {
               e.preventDefault();
               if (!boardName.trim()) return;
-              createBoard.mutate(boardName.trim(), {
-                onSuccess: () => {
-                  setBoardName("");
-                  setBoardDialogOpen(false);
-                },
-              });
+              createBoard.mutate(
+                templateId
+                  ? { name: boardName.trim(), templateId }
+                  : boardName.trim(),
+                { onSuccess: () => setBoardDialogOpen(false) },
+              );
             }}
           >
+            <div className="grid max-h-64 grid-cols-2 gap-2 overflow-y-auto pr-1">
+              <button
+                type="button"
+                onClick={() => pickTemplate(null)}
+                className={cn(
+                  "flex flex-col items-start gap-1 rounded-md border p-2.5 text-left",
+                  templateId === null
+                    ? "border-neutral-900 bg-neutral-50"
+                    : "border-neutral-200 hover:border-neutral-300",
+                )}
+              >
+                <Plus size={15} className="text-neutral-400" />
+                <span className="text-[13px] font-medium text-neutral-800">
+                  Blank board
+                </span>
+                <span className="text-xs text-neutral-400">
+                  Start from scratch
+                </span>
+              </button>
+              {templates.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => pickTemplate(t.id)}
+                  className={cn(
+                    "flex flex-col items-start gap-1 rounded-md border p-2.5 text-left",
+                    templateId === t.id
+                      ? "border-neutral-900 bg-neutral-50"
+                      : "border-neutral-200 hover:border-neutral-300",
+                  )}
+                >
+                  <LayoutTemplate size={15} className="text-neutral-400" />
+                  <span className="text-[13px] font-medium text-neutral-800">
+                    {t.name}
+                  </span>
+                  <span className="line-clamp-2 text-xs text-neutral-400">
+                    {t.description}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {templateId && (
+              <p className="text-xs text-neutral-400">
+                {templates.find((t) => t.id === templateId)?.explainer}
+              </p>
+            )}
+
             <Input
               autoFocus
               placeholder="Board name"
               value={boardName}
-              onChange={(e) => setBoardName(e.target.value)}
+              onChange={(e) => {
+                setBoardName(e.target.value);
+                setNameEdited(true);
+              }}
               required
             />
             <div className="flex justify-end gap-2">
