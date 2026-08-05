@@ -11,18 +11,21 @@
 # drizzle/0002_tenancy_and_rls.sql creates a Postgres role `app_user`
 # with a hardcoded dev password (documented in that file as dev-only,
 # rotated in production via secrets management — never via migration
-# history). Render's managed Postgres only exposes one connection string
-# (the owner role), so:
-#   1. First deploy runs with APP_DATABASE_URL unset/wrong — expected.
-#   2. Run migrations once against DATABASE_URL (see apps/api/Dockerfile's
-#      CMD comment for the exact command), which creates `app_user`.
-#   3. Connect with `psql "$DATABASE_URL"` and run:
+# history). Render wires DATABASE_URL to the owner connection, while the API
+# requires APP_DATABASE_URL at startup. For the initial bootstrap:
+#   1. In the Blueprint prompt, temporarily set APP_DATABASE_URL to the same
+#      owner connection string as DATABASE_URL. This is only for bootstrap;
+#      the owner bypasses RLS and must not remain the runtime credential.
+#   2. Deploy, then run migrations once against DATABASE_URL from the API
+#      service shell (`pnpm exec drizzle-kit migrate`, from apps/api) or via
+#      Render's `psql` command. This creates `app_user`.
+#   3. Connect as the owner and run:
 #        ALTER ROLE app_user PASSWORD '<a-strong-random-value>';
 #   4. In the Render dashboard, set APP_DATABASE_URL on the api service to
 #      DATABASE_URL with the user/password swapped to app_user/<that
 #      value> — same host, port, and database name.
-#   5. Redeploy (or the service restarts and picks it up).
-# Skipping this ships staging with a publicly-known database password.
+#   5. Redeploy (or restart) and verify the API health check. Do not leave the
+#      owner URL in APP_DATABASE_URL or the dev password on app_user.
 
 databases:
   - name: trellis-staging-db
